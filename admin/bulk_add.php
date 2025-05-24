@@ -1,0 +1,731 @@
+<?php
+// ป้องกันการเข้าถึงไฟล์โดยตรง
+if (!defined('SECURE_ACCESS')) {
+    die('Direct access not permitted');
+}
+
+// ตรวจสอบว่ามี session หรือไม่
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: index.php?page=admin_login");
+    exit;
+}
+
+// ตัวแปรสำหรับเก็บข้อมูล
+$success_count = 0;
+$error_rows = [];
+$total_rows = 0;
+$alert_type = '';
+$alert_message = '';
+$show_alert = false;
+
+// หากมีการ submit form
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
+    try {
+        // ตรวจสอบไฟล์ที่อัปโหลด
+        $file = $_FILES['csv_file'];
+        
+        // ตรวจสอบข้อผิดพลาด
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            throw new Exception("เกิดข้อผิดพลาดในการอัปโหลดไฟล์");
+        }
+        
+        // ตรวจสอบนามสกุลไฟล์
+        $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if ($file_ext !== 'csv') {
+            throw new Exception("กรุณาอัปโหลดไฟล์ CSV เท่านั้น");
+        }
+        
+        // ตรวจสอบขนาดไฟล์ (2MB)
+        if ($file['size'] > 2 * 1024 * 1024) {
+            throw new Exception("ขนาดไฟล์เกิน 2MB");
+        }
+        
+        // อ่านข้อมูลจากไฟล์ CSV ด้วย fopen เพื่อหลีกเลี่ยงปัญหา encoding
+        $handle = fopen($file['tmp_name'], 'r');
+        if (!$handle) {
+            throw new Exception("ไม่สามารถอ่านไฟล์ได้");
+        }
+        
+        // อ่านส่วนหัว (header) และทำความสะอาด
+        $header = fgetcsv($handle);
+        if (!$header) {
+            fclose($handle);
+            throw new Exception("ไฟล์ CSV ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง");
+        }
+        
+        // ทำความสะอาด header - ลบ whitespace และ BOM
+        $header = array_map(function($col) {
+            // ลบ BOM (Byte Order Mark) ถ้ามี
+            $col = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $col);
+            // ลบ whitespace
+            return trim($col);
+        }, $header);
+        
+        // Debug: แสดง header ที่อ่านได้
+        error_log("Header found: " . print_r($header, true));
+        
+        // ตรวจสอบว่ามีคอลัมน์ที่จำเป็นหรือไม่
+        $required_columns = ['student_id', 'id_card', 'firstname', 'lastname', 'email', 'faculty'];
+        $missing_columns = [];
+        
+        foreach ($required_columns as $column) {
+            if (!in_array($column, $header)) {
+                $missing_columns[] = $column;
+            }
+        }
+        
+        if (!empty($missing_columns)) {
+            fclose($handle);
+            throw new Exception("ไฟล์ CSV ขาดคอลัมน์ที่จำเป็น: " . implode(', ', $missing_columns) . "\nคอลัมน์ที่พบ: " . implode(', ', $header));
+        }
+        
+        // เริ่ม transaction
+        $db->beginTransaction();
+        
+        $row_number = 1; // เริ่มนับจากแถวที่ 2 (แถวแรกเป็น header)
+        
+        // ประมวลผลข้อมูลในแต่ละแถว
+        while (($data = fgetcsv($handle)) !== FALSE) {
+            $row_number++;
+            
+            // ข้ามบรรทัดว่าง
+            if (empty(array_filter($data))) {
+                continue;
+            }
+            
+            $total_rows++;
+            
+            // ตรวจสอบว่าจำนวนคอลัมน์ตรงกับ header หรือไม่
+            if (count($data) !== count($header)) {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "จำนวนคอลัมน์ไม่ตรงกับส่วนหัว (พบ " . count($data) . " คาดหวัง " . count($header) . ")"
+                ];
+                continue;
+            }
+            
+            // สร้าง associative array จาก header และข้อมูล
+            $row_data = array_combine($header, $data);
+            
+            // ทำความสะอาดข้อมูล
+            $row_data = array_map('trim', $row_data);
+            
+            // ตรวจสอบข้อมูลที่จำเป็น
+            $error = false;
+            foreach ($required_columns as $column) {
+                if (empty($row_data[$column])) {
+                    $error_rows[] = [
+                        'row' => $row_number,
+                        'data' => implode(',', $data),
+                        'error' => "ข้อมูล {$column} ว่างเปล่า"
+                    ];
+                    $error = true;
+                    break;
+                }
+            }
+            
+            if ($error) {
+                continue;
+            }
+            
+            // ตรวจสอบรูปแบบอีเมล
+            if (!filter_var($row_data['email'], FILTER_VALIDATE_EMAIL)) {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "รูปแบบอีเมลไม่ถูกต้อง: {$row_data['email']}"
+                ];
+                continue;
+            }
+            
+            // ตรวจสอบรูปแบบรหัสบัตรประชาชน
+            if (!preg_match('/^[0-9]{13}$/', $row_data['id_card'])) {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "รหัสบัตรประชาชนต้องเป็นตัวเลข 13 หลัก: {$row_data['id_card']}"
+                ];
+                continue;
+            }
+            
+            // ตรวจสอบว่ารหัสนักศึกษาซ้ำหรือไม่
+            $check_query = "SELECT COUNT(*) as count FROM students WHERE student_id = :student_id";
+            $check_stmt = $db->prepare($check_query);
+            $check_stmt->bindParam(':student_id', $row_data['student_id']);
+            $check_stmt->execute();
+            
+            if ($check_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "รหัสนักศึกษา {$row_data['student_id']} มีอยู่ในระบบแล้ว"
+                ];
+                continue;
+            }
+            
+            // ตรวจสอบว่ารหัสบัตรประชาชนซ้ำหรือไม่
+            $check_id_query = "SELECT COUNT(*) as count FROM students WHERE id_card = :id_card";
+            $check_id_stmt = $db->prepare($check_id_query);
+            $check_id_stmt->bindParam(':id_card', $row_data['id_card']);
+            $check_id_stmt->execute();
+            
+            if ($check_id_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "รหัสบัตรประชาชน {$row_data['id_card']} มีอยู่ในระบบแล้ว"
+                ];
+                continue;
+            }
+            
+            // เตรียมข้อมูลสำหรับบันทึก
+            $student_id = $database->sanitize($row_data['student_id']);
+            $id_card = $database->sanitize($row_data['id_card']);
+            $firstname = $database->sanitize($row_data['firstname']);
+            $lastname = $database->sanitize($row_data['lastname']);
+            $email = $database->sanitize($row_data['email']);
+            $faculty = $database->sanitize($row_data['faculty']);
+            
+            // ข้อมูลที่อาจไม่มี
+            $phone = isset($row_data['phone']) ? $database->sanitize($row_data['phone']) : '';
+            $department = isset($row_data['department']) ? $database->sanitize($row_data['department']) : '';
+            $address = isset($row_data['address']) ? $database->sanitize($row_data['address']) : '';
+            
+            // เตรียมคำสั่ง SQL สำหรับเพิ่มข้อมูล
+            $insert_query = "INSERT INTO students (student_id, id_card, firstname, lastname, email, phone, faculty, department, address, first_login, created_at) 
+                            VALUES (:student_id, :id_card, :firstname, :lastname, :email, :phone, :faculty, :department, :address, 1, NOW())";
+            
+            $insert_stmt = $db->prepare($insert_query);
+            
+            // Bind parameters
+            $insert_stmt->bindParam(':student_id', $student_id);
+            $insert_stmt->bindParam(':id_card', $id_card);
+            $insert_stmt->bindParam(':firstname', $firstname);
+            $insert_stmt->bindParam(':lastname', $lastname);
+            $insert_stmt->bindParam(':email', $email);
+            $insert_stmt->bindParam(':phone', $phone);
+            $insert_stmt->bindParam(':faculty', $faculty);
+            $insert_stmt->bindParam(':department', $department);
+            $insert_stmt->bindParam(':address', $address);
+            
+            // Execute
+            if ($insert_stmt->execute()) {
+                $success_count++;
+            } else {
+                $error_rows[] = [
+                    'row' => $row_number,
+                    'data' => implode(',', $data),
+                    'error' => "ไม่สามารถบันทึกข้อมูลได้: " . implode(', ', $insert_stmt->errorInfo())
+                ];
+            }
+        }
+        
+        fclose($handle);
+        
+        // บันทึก log
+        $log_action = "นำเข้าข้อมูลนักศึกษาแบบกลุ่ม: สำเร็จ {$success_count} รายการ จากทั้งหมด {$total_rows} รายการ";
+        $log_query = "INSERT INTO admin_logs (admin_id, action, created_at) VALUES (:admin_id, :action, NOW())";
+        $log_stmt = $db->prepare($log_query);
+        $log_stmt->bindParam(':admin_id', $_SESSION['admin_id']);
+        $log_stmt->bindParam(':action', $log_action);
+        $log_stmt->execute();
+        
+        // Commit transaction
+        $db->commit();
+        
+        // กำหนดข้อความแจ้งเตือนสำเร็จ
+        $import_success = true;
+        $alert_type = 'success';
+        $alert_message = "นำเข้าข้อมูลสำเร็จ {$success_count} รายการ จากทั้งหมด {$total_rows} รายการ";
+        $show_alert = true;
+        
+    } catch(Exception $e) {
+        // Rollback transaction ในกรณีที่เกิดข้อผิดพลาด
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        $alert_type = 'error';
+        $alert_message = $e->getMessage();
+        $show_alert = true;
+    }
+}
+?>
+
+<!-- เพิ่ม SweetAlert2 CSS และ JS -->
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2>เพิ่มผู้ใช้งานแบบกลุ่ม</h2>
+        <p class="text-muted">อัปโหลดไฟล์ CSV เพื่อเพิ่มผู้ใช้งานหลายรายการพร้อมกัน</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="?page=admin_users" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>กลับไปยังรายการผู้ใช้งาน
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-7">
+        <!-- แบบฟอร์มอัปโหลดไฟล์ CSV -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-upload me-2"></i>อัปโหลดไฟล์ CSV
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="?page=admin_bulk_add" method="post" enctype="multipart/form-data" id="uploadForm">
+                    <div class="mb-3">
+                        <label for="csv_file" class="form-label">เลือกไฟล์ CSV <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                        <div class="form-text">
+                            <strong>คอลัมน์ที่จำเป็น:</strong> student_id, id_card, firstname, lastname, email, faculty<br>
+                            <strong>คอลัมน์เพิ่มเติม:</strong> department, phone, address<br>
+                            <strong>ขนาดไฟล์สูงสุด:</strong> 2MB
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-upload me-2"></i>อัปโหลดและนำเข้าข้อมูล
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <?php if(isset($import_success) && $import_success): ?>
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-check-circle me-2"></i>ผลการนำเข้าข้อมูล
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-primary"><?php echo $total_rows; ?></h3>
+                                <small class="text-muted">จำนวนทั้งหมด</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-success"><?php echo $success_count; ?></h3>
+                                <small class="text-muted">นำเข้าสำเร็จ</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-danger"><?php echo count($error_rows); ?></h3>
+                                <small class="text-muted">เกิดข้อผิดพลาด</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if(count($error_rows) > 0): ?>
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle me-2"></i>รายการที่เกิดข้อผิดพลาด:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mt-2">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th width="10%">แถวที่</th>
+                                            <th width="50%">ข้อมูล</th>
+                                            <th width="40%">สาเหตุ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach($error_rows as $row): ?>
+                                            <tr>
+                                                <td><?php echo $row['row']; ?></td>
+                                                <td><code class="small"><?php echo htmlspecialchars($row['data']); ?></code></td>
+                                                <td><span class="text-danger"><?php echo $row['error']; ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <button type="button" class="btn btn-warning" onclick="downloadErrorReport()">
+                                <i class="fas fa-download me-2"></i>ดาวน์โหลดรายงานข้อผิดพลาด
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <div class="col-md-5">
+        <!-- แสดงตัวอย่างไฟล์ CSV -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-csv me-2"></i>ตัวอย่างไฟล์ CSV
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>ไฟล์ CSV ต้องมีรูปแบบดังนี้:</p>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ส่วนหัว (Header):</label>
+                    <div class="bg-light p-3 rounded">
+                        <code>student_id,id_card,firstname,lastname,email,faculty,department,phone,address</code>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ตัวอย่างข้อมูล:</label>
+                    <div class="bg-light p-3 rounded">
+                        <code class="small">
+                            631234567,1234567890123,สมชาย,มีสุข,somchai@email.com,วิศวกรรมศาสตร์,วิศวกรรมคอมพิวเตอร์,0812345678,กรุงเทพฯ<br>
+                            631234568,1234567890124,สมหญิง,จริงใจ,somying@email.com,บริหารธุรกิจ,การจัดการ,0898765432,กรุงเทพฯ
+                        </code>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <button type="button" class="btn btn-outline-primary" onclick="downloadSample()">
+                        <i class="fas fa-download me-2"></i>ดาวน์โหลดไฟล์ตัวอย่าง
+                    </button>
+                </div>
+                
+                <hr>
+                
+                <div class="alert alert-info" role="alert">
+                    <h6><i class="fas fa-info-circle me-2"></i>คำแนะนำ:</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>คอลัมน์จำเป็น:</strong> student_id, id_card, firstname, lastname, email, faculty</li>
+                        <li><strong>คอลัมน์เพิ่มเติม:</strong> department, phone, address</li>
+                        <li><strong>รหัสบัตรประชาชน:</strong> ต้องเป็นตัวเลข 13 หลัก</li>
+                        <li><strong>อีเมล:</strong> ต้องมีรูปแบบที่ถูกต้อง</li>
+                        <li><strong>Encoding:</strong> UTF-8 สำหรับภาษาไทย</li>
+                        <li><strong>ขนาดไฟล์:</strong> สูงสุด 2MB</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning" role="alert">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>ข้อควรระวัง:</h6>
+                    <ul class="mb-0 small">
+                        <li>ห้ามมีรหัสนักศึกษาซ้ำในระบบ</li>
+                        <li>ห้ามมีรหัสบัตรประชาชนซ้ำในระบบ</li>
+                        <li>ข้อมูลที่มีข้อผิดพลาดจะไม่ถูกนำเข้า</li>
+                        <li>ตรวจสอบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// แสดง SweetAlert เมื่อมีการแจ้งเตือน
+<?php if ($show_alert): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    Swal.fire({
+        icon: '<?php echo $alert_type; ?>',
+        title: '<?php echo $alert_type == "success" ? "สำเร็จ!" : "เกิดข้อผิดพลาด!"; ?>',
+        <?php if (isset($import_success) && $import_success && count($error_rows) > 0): ?>
+        html: '<?php echo $alert_message; ?><br><small class="text-warning">มีข้อมูลบางส่วนที่ไม่สามารถนำเข้าได้ กรุณาตรวจสอบรายละเอียดด้านล่าง</small>',
+        <?php else: ?>
+        text: '<?php echo $alert_message; ?>',
+        <?php endif; ?>
+        confirmButtonText: 'ตกลง',
+        timer: <?php echo $alert_type == "success" ? "5000" : "0"; ?>,
+        timerProgressBar: <?php echo $alert_type == "success" ? "true" : "false"; ?>
+    });
+});
+<?php endif; ?>
+
+// ยืนยันการอัปโหลด
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        Swal.fire({
+            icon: 'error',
+            title: 'กรุณาเลือกไฟล์',
+            text: 'กรุณาเลือกไฟล์ CSV ที่ต้องการอัปโหลด'
+        });
+        return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+        Swal.fire({
+            icon: 'error',
+            title: 'ไฟล์ใหญ่เกินไป',
+            text: 'ขนาดไฟล์ต้องไม่เกิน 2MB'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        title: 'ยืนยันการอัปโหลด',
+        text: 'คุณต้องการอัปโหลดและนำเข้าข้อมูลจากไฟล์ ' + file.name + ' หรือไม่?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '<i class="fas fa-upload me-2"></i>อัปโหลด',
+        cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // แสดง loading
+            Swal.fire({
+                title: 'กำลังประมวลผลไฟล์...',
+                text: 'กรุณารอสักครู่ ระบบกำลังอ่านและนำเข้าข้อมูล',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // ส่งฟอร์ม
+            this.submit();
+        }
+    });
+});
+
+// ฟังก์ชันดาวน์โหลดไฟล์ตัวอย่าง
+function downloadSample() {
+    const csvContent = "student_id,id_card,firstname,lastname,email,faculty,department,phone,address\n" +
+                      "631234567,1234567890123,สมชาย,มีสุข,somchai@email.com,วิศวกรรมศาสตร์,วิศวกรรมคอมพิวเตอร์,0812345678,กรุงเทพฯ\n" +
+                      "631234568,1234567890124,สมหญิง,จริงใจ,somying@email.com,บริหารธุรกิจ,การจัดการ,0898765432,กรุงเทพฯ\n" +
+                      "631234569,1234567890125,สมปอง,ใจดี,sompong@email.com,ครุศาสตร์,การศึกษา,0876543210,นนทบุรี";
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'sample_students.csv';
+    link.click();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'ดาวน์โหลดสำเร็จ',
+        text: 'ไฟล์ตัวอย่างถูกดาวน์โหลดแล้ว',
+        timer: 2000,
+        timerProgressBar: true,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false
+    });
+}
+
+// ฟังก์ชันดาวน์โหลดรายงานข้อผิดพลาด
+function downloadErrorReport() {
+    <?php if (!empty($error_rows)): ?>
+    let csvContent = "แถวที่,ข้อมูล,สาเหตุ\n";
+    
+    <?php foreach($error_rows as $row): ?>
+    csvContent += "<?php echo $row['row']; ?>," + 
+                  "\"<?php echo str_replace('"', '""', $row['data']); ?>\"," + 
+                  "\"<?php echo str_replace('"', '""', $row['error']); ?>\"\n";
+    <?php endforeach; ?>
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'error_report_' + new Date().toISOString().split('T')[0] + '.csv';
+    link.click();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'ดาวน์โหลดสำเร็จ',
+        text: 'รายงานข้อผิดพลาดถูกดาวน์โหลดแล้ว',
+        timer: 2000,
+        timerProgressBar: true,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false
+    });
+    <?php endif; ?>
+}
+
+// ตรวจสอบไฟล์ก่อนอัปโหลด
+document.getElementById('csv_file').addEventListener('change', function() {
+    const file = this.files[0];
+    
+    if (file) {
+        // ตรวจสอบนามสกุลไฟล์
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        if (fileExt !== 'csv') {
+            Swal.fire({
+                icon: 'error',
+                title: 'ไฟล์ไม่ถูกต้อง',
+                text: 'กรุณาเลือกไฟล์ CSV เท่านั้น'
+            });
+            this.value = '';
+            return;
+        }
+        
+        // ตรวจสอบขนาดไฟล์
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire({
+                icon: 'error',
+                title: 'ไฟล์ใหญ่เกินไป',
+                text: 'ขนาดไฟล์ต้องไม่เกิน 2MB'
+            });
+            this.value = '';
+            return;
+        }
+        
+        // แสดงข้อมูลไฟล์
+        const fileSize = (file.size / 1024).toFixed(2);
+        Swal.fire({
+            icon: 'info',
+            title: 'ไฟล์ที่เลือก',
+            html: `<strong>ชื่อไฟล์:</strong> ${file.name}<br>
+                   <strong>ขนาด:</strong> ${fileSize} KB<br>
+                   <small class="text-muted">คลิกอัปโหลดเพื่อดำเนินการต่อ</small>`,
+            timer: 3000,
+            timerProgressBar: true
+        });
+    }
+});
+
+// เพิ่ม drag & drop functionality
+const dropZone = document.querySelector('.card-body');
+const fileInput = document.getElementById('csv_file');
+
+dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('border-primary', 'bg-light');
+});
+
+dropZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary', 'bg-light');
+});
+
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary', 'bg-light');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        
+        // ตรวจสอบนามสกุลไฟล์
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        if (fileExt !== 'csv') {
+            Swal.fire({
+                icon: 'error',
+                title: 'ไฟล์ไม่ถูกต้อง',
+                text: 'กรุณาเลือกไฟล์ CSV เท่านั้น'
+            });
+            return;
+        }
+        
+        fileInput.files = files;
+        fileInput.dispatchEvent(new Event('change'));
+    }
+});
+
+// เพิ่มฟังก์ชันตรวจสอบ CSV format
+function validateCSVFormat(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split('\n');
+            
+            if (lines.length < 2) {
+                reject('ไฟล์ CSV ต้องมีข้อมูลอย่างน้อย 2 แถว (header + data)');
+                return;
+            }
+            
+            const header = lines[0].split(',');
+            const requiredColumns = ['student_id', 'id_card', 'firstname', 'lastname', 'email', 'faculty'];
+            const missingColumns = requiredColumns.filter(col => !header.includes(col));
+            
+            if (missingColumns.length > 0) {
+                reject(`ขาดคอลัมน์ที่จำเป็น: ${missingColumns.join(', ')}`);
+                return;
+            }
+            
+            resolve('รูปแบบไฟล์ถูกต้อง');
+        };
+        reader.readAsText(file);
+    });
+}
+
+// เพิ่ม progress bar สำหรับการอัปโหลด
+function showUploadProgress() {
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress >= 90) {
+            progress = 90;
+            clearInterval(interval);
+        }
+        
+        Swal.update({
+            html: `
+                <div class="text-center">
+                    <div class="mb-3">กำลังประมวลผลไฟล์...</div>
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             style="width: ${progress}%"></div>
+                    </div>
+                    <small class="text-muted">${Math.round(progress)}% เสร็จสิ้น</small>
+                </div>
+            `
+        });
+    }, 200);
+}
+
+// เพิ่ม keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + U = อัปโหลด
+    if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+        e.preventDefault();
+        document.getElementById('csv_file').click();
+    }
+    
+    // Ctrl/Cmd + D = ดาวน์โหลดตัวอย่าง
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        downloadSample();
+    }
+});
+
+// เพิ่ม tooltip สำหรับข้อมูล
+document.addEventListener('DOMContentLoaded', function() {
+    // เพิ่ม tooltip ให้กับ icon ต่างๆ
+    const tooltips = [
+        { selector: '[data-bs-toggle="tooltip"]', },
+    ];
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+// เพิ่ม animation สำหรับ cards
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.transition = 'all 0.3s ease';
+    });
+    
+    card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateY(0)';
+    });
+});
+</script>
+
+<style>
+
+</style>
