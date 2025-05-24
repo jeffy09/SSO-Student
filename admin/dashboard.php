@@ -17,20 +17,19 @@ try {
     $student_stmt = $db->prepare($student_query);
     $student_stmt->execute();
     $student_count = $student_stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
+
     // จำนวนนักศึกษาที่เชื่อมต่อ Google
     $google_query = "SELECT COUNT(*) as total FROM students WHERE google_id IS NOT NULL AND google_id != ''";
     $google_stmt = $db->prepare($google_query);
     $google_stmt->execute();
     $google_count = $google_stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
+
     // จำนวนนักศึกษาตามคณะ
     $faculty_query = "SELECT faculty, COUNT(*) as count FROM students GROUP BY faculty ORDER BY count DESC";
     $faculty_stmt = $db->prepare($faculty_query);
     $faculty_stmt->execute();
     $faculty_stats = $faculty_stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-} catch(PDOException $e) {
+} catch (PDOException $e) {
     $error_message = "เกิดข้อผิดพลาด: " . $e->getMessage();
 }
 ?>
@@ -42,7 +41,7 @@ try {
     </div>
 </div>
 
-<?php if(isset($error_message)): ?>
+<?php if (isset($error_message)): ?>
     <div class="alert alert-danger" role="alert">
         <?php echo $error_message; ?>
     </div>
@@ -67,7 +66,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card border-success mb-4">
             <div class="card-body">
@@ -86,7 +85,7 @@ try {
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card border-info mb-4">
             <div class="card-body">
@@ -126,25 +125,25 @@ try {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach($faculty_stats as $faculty): ?>
-                        <tr>
-                            <td><?php echo $faculty['faculty']; ?></td>
-                            <td><?php echo $faculty['count']; ?></td>
-                            <td>
-                                <div class="progress">
-                                    <div class="progress-bar" role="progressbar" style="width: <?php echo ($student_count > 0) ? ($faculty['count'] / $student_count) * 100 : 0; ?>%;" aria-valuenow="<?php echo ($student_count > 0) ? ($faculty['count'] / $student_count) * 100 : 0; ?>" aria-valuemin="0" aria-valuemax="100">
-                                        <?php echo ($student_count > 0) ? round(($faculty['count'] / $student_count) * 100, 2) : 0; ?>%
+                        <?php foreach ($faculty_stats as $faculty): ?>
+                            <tr>
+                                <td><?php echo $faculty['faculty']; ?></td>
+                                <td><?php echo $faculty['count']; ?></td>
+                                <td>
+                                    <div class="progress">
+                                        <div class="progress-bar" role="progressbar" style="width: <?php echo ($student_count > 0) ? ($faculty['count'] / $student_count) * 100 : 0; ?>%;" aria-valuenow="<?php echo ($student_count > 0) ? ($faculty['count'] / $student_count) * 100 : 0; ?>" aria-valuemin="0" aria-valuemax="100">
+                                            <?php echo ($student_count > 0) ? round(($faculty['count'] / $student_count) * 100, 2) : 0; ?>%
+                                        </div>
                                     </div>
-                                </div>
-                            </td>
-                        </tr>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card shadow mb-4">
             <div class="card-header bg-warning text-dark">
@@ -160,6 +159,10 @@ try {
                     </a>
                     <a href="?page=admin_bulk_add" class="list-group-item list-group-item-action">
                         <i class="fas fa-file-upload me-2"></i> นำเข้าข้อมูลผู้ใช้งานแบบกลุ่ม
+                    </a>
+                    <!-- เพิ่มรายการเมนูใหม่ตรงนี้ -->
+                    <a href="?page=admin_logs" class="list-group-item list-group-item-action">
+                        <i class="fas fa-history me-2"></i> ประวัติการทำงาน (Logs)
                     </a>
                 </div>
             </div>
