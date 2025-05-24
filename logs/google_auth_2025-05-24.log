@@ -1,0 +1,51 @@
+[2025-05-24 11:55:36] Received code from Google, user_type: student
+[2025-05-24 11:55:36] Received access token successfully
+[2025-05-24 11:55:36] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 11:55:36] Stored refresh token for student: 631001001
+[2025-05-24 11:55:36] Stored tokens in database for student: 631001001
+[2025-05-24 11:55:36] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 11:55:57] Received code from Google, user_type: student
+[2025-05-24 11:55:57] Received access token successfully
+[2025-05-24 11:55:57] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 11:55:57] Stored refresh token for student: 631001001
+[2025-05-24 11:55:57] Stored tokens in database for student: 631001001
+[2025-05-24 11:55:57] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 12:18:32] Received code from Google, user_type: student
+[2025-05-24 12:18:33] Received access token successfully
+[2025-05-24 12:18:33] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 12:18:33] Stored refresh token for student: 631001001
+[2025-05-24 12:18:33] Stored tokens in database for student: 631001001
+[2025-05-24 12:18:33] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 12:18:54] Received code from Google, user_type: student
+[2025-05-24 12:18:54] Received access token successfully
+[2025-05-24 12:18:54] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 12:18:54] Stored refresh token for student: 631001001
+[2025-05-24 12:18:54] Stored tokens in database for student: 631001001
+[2025-05-24 12:18:54] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 12:22:44] Received code from Google, user_type: student
+[2025-05-24 12:22:44] Received access token successfully
+[2025-05-24 12:22:45] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 12:22:45] Stored refresh token for student: 631001001
+[2025-05-24 12:22:45] Stored tokens in database for student: 631001001
+[2025-05-24 12:22:45] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 12:30:53] Received code from Google, user_type: student
+[2025-05-24 12:30:54] Received access token successfully
+[2025-05-24 12:30:54] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 12:30:54] Stored refresh token for student: 631001001
+[2025-05-24 12:30:54] Stored tokens in database for student: 631001001
+[2025-05-24 12:30:54] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 12:31:05] Received code from Google, user_type: student
+[2025-05-24 12:31:05] Received access token successfully
+[2025-05-24 12:31:05] User info received: email=somchai.ruk@student.mbu.ac.th, google_id=103819443211993842416
+[2025-05-24 12:31:05] Stored refresh token for student: 631001001
+[2025-05-24 12:31:05] Stored tokens in database for student: 631001001
+[2025-05-24 12:31:05] Student login successful: id=1, name=สมชาย รักเรียน
+[2025-05-24 13:26:42] Received code from Google, user_type: admin
+[2025-05-24 13:26:43] Received access token successfully
+[2025-05-24 13:26:43] User info received: email=jetsada.ta@mbu.ac.th, google_id=112165823416057460835
+[2025-05-24 13:26:43] Admin email check: jetsada.ta@mbu.ac.th, rows found: 1
+[2025-05-24 13:26:43] Admin found: id=1, name=ผู้ดูแลระบบ
+[2025-05-24 13:26:43] Updated admin google_id: id=1
+[2025-05-24 13:26:43] Stored refresh token for admin: 1
+[2025-05-24 13:26:43] Stored tokens in database for admin: 1
+[2025-05-24 13:26:43] Admin login successful, checking if connecting from profile
