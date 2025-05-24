@@ -1,290 +1,192 @@
 <?php
-// ไฟล์ pages/change_password.php
-
+// ป้องกันการเข้าถึงไฟล์โดยตรง
 if (!defined('SECURE_ACCESS')) {
     die('Direct access not permitted');
 }
 
-// ตรวจสอบการล็อกอิน
-if (!isset($_SESSION['student_id'])) {
-    header('Location: index.php?page=student_login');
+// ตรวจสอบว่ามี session หรือไม่
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: index.php?page=admin_login");
     exit;
 }
 
-// ประมวลผลฟอร์ม
+// หากมีการ submit form
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    include_once 'auth/student_login_process.php';
-    
-    $old_password = $_POST['old_password'] ?? '';
-    $new_password = $_POST['new_password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
-    
-    // ตรวจสอบข้อมูล
-    if (empty($old_password) || empty($new_password) || empty($confirm_password)) {
-        $error_message = 'กรุณากรอกข้อมูลให้ครบถ้วน';
-    } elseif ($new_password !== $confirm_password) {
-        $error_message = 'รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน';
-    } else {
-        // เปลี่ยนรหัสผ่าน
-        $result = changeStudentPassword($db, $_SESSION['student_code'], $old_password, $new_password);
+    try {
+        // รับค่าจาก form
+        $student_id = isset($_POST['student_id']) ? $database->sanitize($_POST['student_id']) : '';
+        $id_card = isset($_POST['id_card']) ? $database->sanitize($_POST['id_card']) : '';
+        $firstname = isset($_POST['firstname']) ? $database->sanitize($_POST['firstname']) : '';
+        $lastname = isset($_POST['lastname']) ? $database->sanitize($_POST['lastname']) : '';
+        $email = isset($_POST['email']) ? $database->sanitize($_POST['email']) : '';
+        $phone = isset($_POST['phone']) ? $database->sanitize($_POST['phone']) : '';
+        $faculty = isset($_POST['faculty']) ? $database->sanitize($_POST['faculty']) : '';
+        $department = isset($_POST['department']) ? $database->sanitize($_POST['department']) : '';
+        $address = isset($_POST['address']) ? $database->sanitize($_POST['address']) : '';
         
-        if ($result['success']) {
-            $success_message = $result['message'];
-        } else {
-            $error_message = $result['message'];
+        // ตรวจสอบว่ามีข้อมูลที่จำเป็นครบหรือไม่
+        if (empty($student_id) || empty($id_card) || empty($firstname) || empty($lastname) || empty($email) || empty($faculty)) {
+            throw new Exception("กรุณากรอกข้อมูลสำคัญให้ครบถ้วน");
         }
+        
+        // ตรวจสอบว่ารหัสนักศึกษาซ้ำหรือไม่
+        $check_query = "SELECT COUNT(*) as count FROM students WHERE student_id = :student_id";
+        $check_stmt = $db->prepare($check_query);
+        $check_stmt->bindParam(':student_id', $student_id);
+        $check_stmt->execute();
+        
+        if ($check_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
+            throw new Exception("รหัสนักศึกษานี้มีอยู่ในระบบแล้ว");
+        }
+        
+        // เข้ารหัสรหัสบัตรประชาชน
+        $password_hash = password_hash($id_card, PASSWORD_DEFAULT);
+        
+        // เตรียมคำสั่ง SQL สำหรับเพิ่มข้อมูล
+        $insert_query = "INSERT INTO students (student_id, id_card, password_hash, firstname, lastname, email, phone, faculty, department, address, first_login, created_at) 
+                        VALUES (:student_id, :id_card, :password_hash, :firstname, :lastname, :email, :phone, :faculty, :department, :address, 1, NOW())";
+        
+        $insert_stmt = $db->prepare($insert_query);
+        
+        // Bind parameters
+        $insert_stmt->bindParam(':student_id', $student_id);
+        $insert_stmt->bindParam(':id_card', $id_card);
+        $insert_stmt->bindParam(':password_hash', $password_hash);
+        $insert_stmt->bindParam(':firstname', $firstname);
+        $insert_stmt->bindParam(':lastname', $lastname);
+        $insert_stmt->bindParam(':email', $email);
+        $insert_stmt->bindParam(':phone', $phone);
+        $insert_stmt->bindParam(':faculty', $faculty);
+        $insert_stmt->bindParam(':department', $department);
+        $insert_stmt->bindParam(':address', $address);
+        
+        // Execute
+        if ($insert_stmt->execute()) {
+            // เพิ่มข้อมูลสำเร็จ ให้บันทึก log
+            $student_id_new = $db->lastInsertId();
+            $log_action = "เพิ่มนักศึกษาใหม่: " . $student_id . " - " . $firstname . " " . $lastname;
+            
+            $log_query = "INSERT INTO admin_logs (admin_id, action, created_at) VALUES (:admin_id, :action, NOW())";
+            $log_stmt = $db->prepare($log_query);
+            $log_stmt->bindParam(':admin_id', $_SESSION['admin_id']);
+            $log_stmt->bindParam(':action', $log_action);
+            $log_stmt->execute();
+            
+            // กำหนดข้อความแจ้งเตือนสำเร็จ
+            $success = true;
+            $message = "เพิ่มข้อมูลนักศึกษาสำเร็จ";
+        } else {
+            throw new Exception("ไม่สามารถเพิ่มข้อมูลได้");
+        }
+        
+    } catch(Exception $e) {
+        $error_message = $e->getMessage();
     }
 }
 ?>
 
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน
-                    </h5>
-                </div>
-                <div class="card-body">
-                    
-                    <?php if (isset($success_message)): ?>
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle"></i> <?= htmlspecialchars($success_message) ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <?php if (isset($error_message)): ?>
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($error_message) ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <form method="POST" id="changePasswordForm">
-                        <div class="mb-3">
-                            <label for="old_password" class="form-label">รหัสผ่านเดิม *</label>
-                            <div class="input-group">
-                                <input type="password" 
-                                       class="form-control" 
-                                       id="old_password" 
-                                       name="old_password" 
-                                       required>
-                                <button class="btn btn-outline-secondary" 
-                                        type="button" 
-                                        onclick="togglePassword('old_password')">
-                                    <i class="fas fa-eye" id="old_password_icon"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="new_password" class="form-label">รหัสผ่านใหม่ *</label>
-                            <div class="input-group">
-                                <input type="password" 
-                                       class="form-control" 
-                                       id="new_password" 
-                                       name="new_password" 
-                                       required>
-                                <button class="btn btn-outline-secondary" 
-                                        type="button" 
-                                        onclick="togglePassword('new_password')">
-                                    <i class="fas fa-eye" id="new_password_icon"></i>
-                                </button>
-                            </div>
-                            <div class="form-text">
-                                รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร มีตัวเลขและตัวอักษรภาษาอังกฤษ
-                            </div>
-                            <div id="password_strength" class="mt-2"></div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="confirm_password" class="form-label">ยืนยันรหัสผ่านใหม่ *</label>
-                            <div class="input-group">
-                                <input type="password" 
-                                       class="form-control" 
-                                       id="confirm_password" 
-                                       name="confirm_password" 
-                                       required>
-                                <button class="btn btn-outline-secondary" 
-                                        type="button" 
-                                        onclick="togglePassword('confirm_password')">
-                                    <i class="fas fa-eye" id="confirm_password_icon"></i>
-                                </button>
-                            </div>
-                            <div id="password_match" class="mt-1"></div>
-                        </div>
-                        
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> เปลี่ยนรหัสผ่าน
-                            </button>
-                            <a href="index.php?page=student_profile" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left"></i> กลับ
-                            </a>
-                        </div>
-                    </form>
-                    
-                </div>
-            </div>
-            
-            <!-- คำแนะนำความปลอดภัย -->
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-shield-alt"></i> ข้อแนะนำความปลอดภัย
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <ul class="mb-0">
-                        <li>ใช้รหัสผ่านที่แข็งแกร่งและไม่เคยใช้ที่อื่น</li>
-                        <li>ไม่แชร์รหัสผ่านให้ผู้อื่น</li>
-                        <li>เปลี่ยนรหัสผ่านเป็นระยะ ๆ</li>
-                        <li>ออกจากระบบทุกครั้งหลังใช้งาน</li>
-                        <li>ไม่บันทึกรหัสผ่านในเบราว์เซอร์สาธารณะ</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2>เพิ่มผู้ใช้งานใหม่</h2>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="?page=admin_users" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> กลับไปยังรายการผู้ใช้งาน</a>
     </div>
 </div>
 
+<?php if(isset($error_message)): ?>
+    <div class="alert alert-danger" role="alert">
+        <?php echo $error_message; ?>
+    </div>
+<?php endif; ?>
+
+<!-- แบบฟอร์มเพิ่มผู้ใช้งาน -->
+<div class="card shadow">
+    <div class="card-body">
+        <form action="?page=admin_add_user" method="post" id="addUserForm">
+            <div class="row">
+                <!-- ข้อมูลหลัก -->
+                <div class="col-md-6">
+                    <h5>ข้อมูลหลัก</h5>
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="student_id" class="form-label">รหัสนักศึกษา <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="student_id" name="student_id" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_card" class="form-label">รหัสบัตรประชาชน <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="id_card" name="id_card" required maxlength="13">
+                        <div class="form-text">ใช้สำหรับการเข้าสู่ระบบครั้งแรก (จะถูกเข้ารหัสในฐานข้อมูล)</div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="firstname" class="form-label">ชื่อ <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="firstname" name="firstname" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="lastname" class="form-label">นามสกุล <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="lastname" name="lastname" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">อีเมล <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                        <div class="form-text">ควรเป็นอีเมลมหาวิทยาลัยเพื่อใช้ในการเชื่อมต่อกับ Google</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">เบอร์โทรศัพท์</label>
+                        <input type="text" class="form-control" id="phone" name="phone">
+                    </div>
+                </div>
+                
+                <!-- ข้อมูลเพิ่มเติม -->
+                <div class="col-md-6">
+                    <h5>ข้อมูลการศึกษา</h5>
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="faculty" class="form-label">คณะ <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="faculty" name="faculty" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="department" class="form-label">สาขา</label>
+                        <input type="text" class="form-control" id="department" name="department">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="address" class="form-label">ที่อยู่</label>
+                        <textarea class="form-control" id="address" name="address" rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary btn-lg px-5"><i class="fas fa-save"></i> บันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if(isset($success) && $success): ?>
 <script>
-// แสดง/ซ่อนรหัสผ่าน
-function togglePassword(fieldId) {
-    const field = document.getElementById(fieldId);
-    const icon = document.getElementById(fieldId + '_icon');
-    
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        field.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-    }
-}
-
-// ตรวจสอบความแข็งแกร่งของรหัสผ่าน
-document.getElementById('new_password').addEventListener('input', function() {
-    const password = this.value;
-    const strengthDiv = document.getElementById('password_strength');
-    
-    let score = 0;
-    let feedback = [];
-    
-    // ตรวจสอบความยาว
-    if (password.length >= 8) {
-        score++;
-    } else {
-        feedback.push('อย่างน้อย 8 ตัวอักษร');
-    }
-    
-    // ตรวจสอบตัวเลข
-    if (/[0-9]/.test(password)) {
-        score++;
-    } else {
-        feedback.push('มีตัวเลข');
-    }
-    
-    // ตรวจสอบตัวอักษรภาษาอังกฤษ
-    if (/[a-zA-Z]/.test(password)) {
-        score++;
-    } else {
-        feedback.push('มีตัวอักษรภาษาอังกฤษ');
-    }
-    
-    // ตรวจสอบตัวอักษรใหญ่และเล็ก
-    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) {
-        score++;
-    }
-    
-    // ตรวจสอบอักขระพิเศษ
-    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-        score++;
-    }
-    
-    // แสดงผล
-    let strengthText = '';
-    let strengthClass = '';
-    
-    if (password.length === 0) {
-        strengthDiv.innerHTML = '';
-        return;
-    }
-    
-    if (score < 2) {
-        strengthText = 'อ่อนแอ';
-        strengthClass = 'text-danger';
-    } else if (score < 3) {
-        strengthText = 'ปานกลาง';
-        strengthClass = 'text-warning';
-    } else if (score < 4) {
-        strengthText = 'ดี';
-        strengthClass = 'text-info';
-    } else {
-        strengthText = 'แข็งแกร่ง';
-        strengthClass = 'text-success';
-    }
-    
-    let html = `<small class="${strengthClass}">ความแข็งแกร่ง: ${strengthText}</small>`;
-    
-    if (feedback.length > 0) {
-        html += `<br><small class="text-muted">ต้องการ: ${feedback.join(', ')}</small>`;
-    }
-    
-    strengthDiv.innerHTML = html;
-});
-
-// ตรวจสอบการยืนยันรหัสผ่าน
-document.getElementById('confirm_password').addEventListener('input', function() {
-    const newPassword = document.getElementById('new_password').value;
-    const confirmPassword = this.value;
-    const matchDiv = document.getElementById('password_match');
-    
-    if (confirmPassword.length === 0) {
-        matchDiv.innerHTML = '';
-        return;
-    }
-    
-    if (newPassword === confirmPassword) {
-        matchDiv.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> รหัสผ่านตรงกัน</small>';
-    } else {
-        matchDiv.innerHTML = '<small class="text-danger"><i class="fas fa-times"></i> รหัสผ่านไม่ตรงกัน</small>';
-    }
-});
-
-// ตรวจสอบก่อนส่งฟอร์ม
-document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
-    const newPassword = document.getElementById('new_password').value;
-    const confirmPassword = document.getElementById('confirm_password').value;
-    
-    // ตรวจสอบความยาว
-    if (newPassword.length < 8) {
-        e.preventDefault();
-        alert('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
-        return;
-    }
-    
-    // ตรวจสอบตัวเลข
-    if (!/[0-9]/.test(newPassword)) {
-        e.preventDefault();
-        alert('รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว');
-        return;
-    }
-    
-    // ตรวจสอบตัวอักษร
-    if (!/[a-zA-Z]/.test(newPassword)) {
-        e.preventDefault();
-        alert('รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษอย่างน้อย 1 ตัว');
-        return;
-    }
-    
-    // ตรวจสอบการยืนยัน
-    if (newPassword !== confirmPassword) {
-        e.preventDefault();
-        alert('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
-        return;
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    Swal.fire({
+        title: 'สำเร็จ!',
+        text: '<?php echo $message; ?>',
+        icon: 'success',
+        confirmButtonText: 'ตกลง'
+    }).then((result) => {
+        // ล้างฟอร์ม
+        document.getElementById('addUserForm').reset();
+    });
 });
 </script>
+<?php endif; ?>
