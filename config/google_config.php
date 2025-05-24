@@ -8,7 +8,7 @@ if (!defined('SECURE_ACCESS')) {
 class GoogleConfig
 {
     // ค่าที่ได้จาก Google Cloud Console
-    private $client_id = 'your_cliend_id';
+    private $client_id = 'your_client_id';
     private $client_secret = 'your_client_secret';
 
     // URI สำหรับ redirect หลังจาก auth กับ Google
@@ -550,4 +550,9 @@ class GoogleConfig
 
         return round($bytes, 2) . ' ' . $units[$pow];
     }
+
+
 }
+
+
+?>
