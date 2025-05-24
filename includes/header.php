@@ -6,26 +6,28 @@ if (!defined('SECURE_ACCESS')) {
 ?>
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการนักศึกษา</title>
-    
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+
     <!-- SweetAlert2 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.19/dist/sweetalert2.min.css">
-    
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/css/style.css">
-    
+
     <!-- Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
+
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -62,8 +64,8 @@ if (!defined('SECURE_ACCESS')) {
                     <li class="nav-item">
                         <a class="nav-link" href="<?php echo $home_link; ?>"><?php echo $home_text; ?></a>
                     </li>
-                    
-                    <?php if(isset($_SESSION['student_id'])): ?>
+
+                    <?php if (isset($_SESSION['student_id'])): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="?page=student_profile">โปรไฟล์</a>
                         </li>
@@ -77,12 +79,14 @@ if (!defined('SECURE_ACCESS')) {
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" href="?page=student_dashboard"><i class="fas fa-tachometer-alt me-2"></i>แดชบอร์ด</a></li>
                                 <li><a class="dropdown-item" href="?page=student_profile"><i class="fas fa-user-edit me-2"></i>โปรไฟล์</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
                                 <li><a class="dropdown-item" href="?page=logout"><i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ</a></li>
                             </ul>
                         </li>
-                    
-                    <?php elseif(isset($_SESSION['admin_id'])): ?>
+
+                    <?php elseif (isset($_SESSION['admin_id'])): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="?page=admin_users">จัดการผู้ใช้งาน</a>
                         </li>
@@ -95,6 +99,7 @@ if (!defined('SECURE_ACCESS')) {
                                 <li><a class="dropdown-item" href="?page=admin_bulk_add"><i class="fas fa-file-upload me-2"></i>เพิ่มแบบกลุ่ม</a></li>
                             </ul>
                         </li>
+
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-user-shield"></i> <?php echo $_SESSION['admin_name']; ?>
@@ -102,11 +107,15 @@ if (!defined('SECURE_ACCESS')) {
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" href="?page=admin_dashboard"><i class="fas fa-tachometer-alt me-2"></i>แดชบอร์ด</a></li>
                                 <li><a class="dropdown-item" href="?page=admin_profile"><i class="fas fa-user-edit me-2"></i>โปรไฟล์</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                                <!-- เพิ่มรายการเมนูใหม่ตรงนี้ -->
+                                <li><a class="dropdown-item" href="?page=admin_logs"><i class="fas fa-history me-2"></i>ประวัติการทำงาน</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
                                 <li><a class="dropdown-item" href="?page=logout"><i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ</a></li>
                             </ul>
                         </li>
-                    
+
                     <?php else: ?>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
@@ -122,9 +131,9 @@ if (!defined('SECURE_ACCESS')) {
             </div>
         </div>
     </nav>
-    
+
     <!-- แสดงข้อความแจ้งเตือนจาก Session -->
-    <?php if(isset($_SESSION['success_message'])): ?>
+    <?php if (isset($_SESSION['success_message'])): ?>
         <div class="container mt-3">
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <?php echo $_SESSION['success_message']; ?>
@@ -133,8 +142,8 @@ if (!defined('SECURE_ACCESS')) {
         </div>
         <?php unset($_SESSION['success_message']); ?>
     <?php endif; ?>
-    
-    <?php if(isset($_SESSION['error_message'])): ?>
+
+    <?php if (isset($_SESSION['error_message'])): ?>
         <div class="container mt-3">
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <?php echo $_SESSION['error_message']; ?>
@@ -143,6 +152,6 @@ if (!defined('SECURE_ACCESS')) {
         </div>
         <?php unset($_SESSION['error_message']); ?>
     <?php endif; ?>
-    
+
     <!-- Main Content -->
     <div class="container my-4">
