@@ -31,26 +31,26 @@ if ($page === 'check_token_status') {
         echo json_encode(['error' => 'Unauthorized']);
         exit;
     }
-    
+
     // ตรวจสอบว่าเป็น POST request
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
         echo json_encode(['error' => 'Method not allowed']);
         exit;
     }
-    
+
     // Set content type เป็น JSON
     header('Content-Type: application/json');
-    
+
     try {
         $student_id = $_SESSION['student_id'];
-        
+
         // ดึงข้อมูล token จากฐานข้อมูล
         $query = "SELECT google_id, google_access_token, google_refresh_token, token_expires_at FROM students WHERE id = :id";
         $stmt = $db->prepare($query);
         $stmt->bindParam(':id', $student_id);
         $stmt->execute();
-        
+
         if ($stmt->rowCount() === 0) {
             echo json_encode([
                 'connected' => false,
@@ -60,9 +60,9 @@ if ($page === 'check_token_status') {
             ]);
             exit;
         }
-        
+
         $student = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         // ตรวจสอบว่ามีการเชื่อมต่อ Google หรือไม่
         if (empty($student['google_id'])) {
             echo json_encode([
@@ -73,7 +73,7 @@ if ($page === 'check_token_status') {
             ]);
             exit;
         }
-        
+
         // ตรวจสอบว่ามี access token หรือไม่
         if (empty($student['google_access_token'])) {
             echo json_encode([
@@ -84,14 +84,14 @@ if ($page === 'check_token_status') {
             ]);
             exit;
         }
-        
+
         // ตรวจสอบวันหมดอายุ
         if (!empty($student['token_expires_at'])) {
             $expires_at = new DateTime($student['token_expires_at']);
             $now = new DateTime();
-            
+
             $time_diff = $expires_at->getTimestamp() - $now->getTimestamp();
-            
+
             if ($time_diff <= 0) {
                 // Token หมดอายุแล้ว
                 echo json_encode([
@@ -116,7 +116,7 @@ if ($page === 'check_token_status') {
                 exit;
             }
         }
-        
+
         // Token ยังใช้ได้
         echo json_encode([
             'connected' => true,
@@ -125,14 +125,13 @@ if ($page === 'check_token_status') {
             'message' => 'Token ยังใช้ได้',
             'expires_at' => $student['token_expires_at']
         ]);
-        
-    } catch(PDOException $e) {
+    } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode([
             'error' => 'Database error',
             'message' => 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล'
         ]);
-    } catch(Exception $e) {
+    } catch (Exception $e) {
         http_response_code(500);
         echo json_encode([
             'error' => 'Server error',
@@ -264,6 +263,14 @@ switch ($page) {
             exit;
         }
         break;
+    case 'admin_logs':
+        if (isset($_SESSION['admin_id'])) {
+            include_once 'admin/logs.php';
+        } else {
+            header("Location: {$base_url}?page=admin_login");
+            exit;
+        }
+        break;
 
     // หน้าตรวจสอบและแก้ไข
     case 'auth_check_admin_login':
@@ -284,4 +291,3 @@ switch ($page) {
 
 // ส่วนท้ายของเว็บไซต์ (Footer)
 include_once 'includes/footer.php';
-?>
