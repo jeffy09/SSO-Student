@@ -23,8 +23,83 @@ $gmail_data = [
     'unread_count' => 0,
     'recent_emails' => [],
     'error' => null,
-    'connected' => false
+    'connected' => false,
+    'token_expired' => false,
+    'needs_reconnect' => false
 ];
+
+// ฟังก์ชันตรวจสอบ token หมดอายุ
+function checkTokenExpiration($db, $student_id) {
+    try {
+        $query = "SELECT google_access_token, google_refresh_token, token_expires_at FROM students WHERE id = :id";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':id', $student_id);
+        $stmt->execute();
+        
+        if ($stmt->rowCount() > 0) {
+            $token_data = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // ตรวจสอบว่ามี token หรือไม่
+            if (empty($token_data['google_access_token'])) {
+                return ['expired' => false, 'exists' => false, 'message' => 'ไม่มี token'];
+            }
+            
+            // ตรวจสอบวันหมดอายุ
+            if (!empty($token_data['token_expires_at'])) {
+                $expires_at = new DateTime($token_data['token_expires_at']);
+                $now = new DateTime();
+                
+                // ตรวจสอบว่าหมดอายุหรือใกล้หมดอายุ (เหลือน้อยกว่า 5 นาที)
+                $time_diff = $expires_at->getTimestamp() - $now->getTimestamp();
+                
+                if ($time_diff <= 0) {
+                    return ['expired' => true, 'exists' => true, 'message' => 'Token หมดอายุแล้ว'];
+                } elseif ($time_diff <= 300) { // เหลือน้อยกว่า 5 นาที
+                    return ['expired' => false, 'exists' => true, 'message' => 'Token ใกล้หมดอายุ', 'near_expiry' => true];
+                }
+            }
+            
+            return ['expired' => false, 'exists' => true, 'message' => 'Token ยังใช้ได้'];
+        }
+        
+        return ['expired' => false, 'exists' => false, 'message' => 'ไม่พบข้อมูล'];
+        
+    } catch(PDOException $e) {
+        return ['expired' => true, 'exists' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()];
+    }
+}
+
+// ฟังก์ชันรีเฟรช token
+function refreshGoogleToken($db, $student_id, $refresh_token) {
+    try {
+        $google_config = new GoogleConfig();
+        $new_token_data = $google_config->refreshAccessToken($refresh_token);
+        
+        if ($new_token_data && isset($new_token_data['access_token'])) {
+            // อัปเดต token ใหม่ในฐานข้อมูล
+            $expires_at = date('Y-m-d H:i:s', time() + $new_token_data['expires_in']);
+            
+            $update_query = "UPDATE students SET 
+                            google_access_token = :access_token, 
+                            token_expires_at = :expires_at 
+                            WHERE id = :id";
+            $update_stmt = $db->prepare($update_query);
+            $update_stmt->bindParam(':access_token', $new_token_data['access_token']);
+            $update_stmt->bindParam(':expires_at', $expires_at);
+            $update_stmt->bindParam(':id', $student_id);
+            
+            if ($update_stmt->execute()) {
+                $_SESSION['google_access_token'] = $new_token_data['access_token'];
+                return ['success' => true, 'token' => $new_token_data['access_token']];
+            }
+        }
+        
+        return ['success' => false, 'message' => 'ไม่สามารถรีเฟรช token ได้'];
+        
+    } catch(Exception $e) {
+        return ['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()];
+    }
+}
 
 // ดึงข้อมูลนักศึกษา
 try {
@@ -46,20 +121,92 @@ try {
     $show_alert = true;
 }
 
+// ตรวจสอบสถานะ token
+$token_status = checkTokenExpiration($db, $_SESSION['student_id']);
+
 // ดึงข้อมูล Gmail หากมีการเชื่อมต่อ Google
-if (!empty($student['google_id']) && isset($_SESSION['google_access_token'])) {
-    try {
-        $google_config = new GoogleConfig();
-        
-        // ดึงจำนวนอีเมลที่ยังไม่ได้อ่าน
-        $gmail_data['unread_count'] = $google_config->getGmailUnreadCount($_SESSION['google_access_token']);
-        
-        // ดึงอีเมล 5 ฉบับล่าสุด
-        $gmail_data['recent_emails'] = $google_config->getGmailRecentEmails($_SESSION['google_access_token'], 5);
-        
-        $gmail_data['connected'] = true;
-    } catch(Exception $e) {
-        $gmail_data['error'] = 'ไม่สามารถดึงข้อมูลอีเมลได้: ' . $e->getMessage();
+if (!empty($student['google_id'])) {
+    // ตรวจสอบว่ามี token ในฐานข้อมูลหรือไม่
+    if ($token_status['exists']) {
+        if ($token_status['expired']) {
+            // Token หมดอายุ - พยายามรีเฟรช
+            $gmail_data['token_expired'] = true;
+            $gmail_data['needs_reconnect'] = true;
+            
+            if (!empty($student['google_refresh_token'])) {
+                $refresh_result = refreshGoogleToken($db, $_SESSION['student_id'], $student['google_refresh_token']);
+                
+                if ($refresh_result['success']) {
+                    $gmail_data['token_expired'] = false;
+                    $gmail_data['needs_reconnect'] = false;
+                    $_SESSION['google_access_token'] = $refresh_result['token'];
+                    
+                    $alert_type = 'success';
+                    $alert_message = 'รีเฟรช token สำเร็จ';
+                    $show_alert = true;
+                } else {
+                    $gmail_data['error'] = 'Token หมดอายุและไม่สามารถรีเฟรชได้ กรุณาเชื่อมต่อใหม่';
+                }
+            } else {
+                $gmail_data['error'] = 'Token หมดอายุและไม่มี refresh token กรุณาเชื่อมต่อใหม่';
+            }
+        } else {
+            // Token ยังใช้ได้
+            if (isset($token_status['near_expiry'])) {
+                // ใกล้หมดอายุ - แจ้งเตือน
+                $alert_type = 'warning';
+                $alert_message = 'Token ใกล้หมดอายุ ระบบจะรีเฟรชอัตโนมัติ';
+                $show_alert = true;
+            }
+            
+            // ตั้งค่า token ใน session หากยังไม่มี
+            if (!isset($_SESSION['google_access_token']) && !empty($student['google_access_token'])) {
+                $_SESSION['google_access_token'] = $student['google_access_token'];
+            }
+        }
+    } else {
+        // ไม่มี token ในฐานข้อมูล
+        $gmail_data['needs_reconnect'] = true;
+        $gmail_data['error'] = 'ไม่พบ token การเข้าถึง กรุณาเชื่อมต่อบัญชี Google ใหม่';
+    }
+    
+    // ลองดึงข้อมูล Gmail หาก token ยังใช้ได้
+    if (!$gmail_data['token_expired'] && !$gmail_data['needs_reconnect'] && isset($_SESSION['google_access_token'])) {
+        try {
+            $google_config = new GoogleConfig();
+            
+            // ดึงจำนวนอีเมลที่ยังไม่ได้อ่าน
+            $gmail_data['unread_count'] = $google_config->getGmailUnreadCount($_SESSION['google_access_token']);
+            
+            // ดึงอีเมล 5 ฉบับล่าสุด
+            $gmail_data['recent_emails'] = $google_config->getGmailRecentEmails($_SESSION['google_access_token'], 5);
+            
+            $gmail_data['connected'] = true;
+            
+        } catch(Exception $e) {
+            $error_message = $e->getMessage();
+            
+            // ตรวจสอบว่าเป็นข้อผิดพลาดเกี่ยวกับ token หรือไม่
+            if (strpos($error_message, '401') !== false || strpos($error_message, 'unauthorized') !== false) {
+                $gmail_data['token_expired'] = true;
+                $gmail_data['needs_reconnect'] = true;
+                $gmail_data['error'] = 'Token ไม่ถูกต้องหรือหมดอายุ กรุณาเชื่อมต่อใหม่';
+                
+                // ลบ token ที่ไม่ถูกต้องออกจากฐานข้อมูล
+                $clear_query = "UPDATE students SET 
+                               google_access_token = NULL, 
+                               google_refresh_token = NULL, 
+                               token_expires_at = NULL 
+                               WHERE id = :id";
+                $clear_stmt = $db->prepare($clear_query);
+                $clear_stmt->bindParam(':id', $_SESSION['student_id']);
+                $clear_stmt->execute();
+                
+                unset($_SESSION['google_access_token']);
+            } else {
+                $gmail_data['error'] = 'ไม่สามารถดึงข้อมูลอีเมลได้: ' . $error_message;
+            }
+        }
     }
 }
 
@@ -100,22 +247,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['refresh_gmail'])) {
 
 // หากมีการรีเฟรช Gmail
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['refresh_gmail'])) {
-    if (!empty($student['google_id']) && isset($_SESSION['google_access_token'])) {
-        try {
-            $google_config = new GoogleConfig();
-            
-            // ดึงข้อมูลใหม่
-            $gmail_data['unread_count'] = $google_config->getGmailUnreadCount($_SESSION['google_access_token']);
-            $gmail_data['recent_emails'] = $google_config->getGmailRecentEmails($_SESSION['google_access_token'], 5);
-            $gmail_data['connected'] = true;
-            
-            $alert_type = 'success';
-            $alert_message = 'รีเฟรชข้อมูลอีเมลสำเร็จ!';
-            $show_alert = true;
-        } catch(Exception $e) {
-            $gmail_data['error'] = 'ไม่สามารถรีเฟรชข้อมูลอีเมลได้: ' . $e->getMessage();
+    if (!empty($student['google_id'])) {
+        // ตรวจสอบ token อีกครั้ง
+        $token_status = checkTokenExpiration($db, $_SESSION['student_id']);
+        
+        if ($token_status['expired'] || $gmail_data['needs_reconnect']) {
             $alert_type = 'error';
-            $alert_message = $gmail_data['error'];
+            $alert_message = 'Token หมดอายุ กรุณาเชื่อมต่อบัญชี Google ใหม่';
+            $show_alert = true;
+        } elseif (isset($_SESSION['google_access_token'])) {
+            try {
+                $google_config = new GoogleConfig();
+                
+                // ดึงข้อมูลใหม่
+                $gmail_data['unread_count'] = $google_config->getGmailUnreadCount($_SESSION['google_access_token']);
+                $gmail_data['recent_emails'] = $google_config->getGmailRecentEmails($_SESSION['google_access_token'], 5);
+                $gmail_data['connected'] = true;
+                $gmail_data['token_expired'] = false;
+                $gmail_data['needs_reconnect'] = false;
+                
+                $alert_type = 'success';
+                $alert_message = 'รีเฟรชข้อมูลอีเมลสำเร็จ!';
+                $show_alert = true;
+            } catch(Exception $e) {
+                $gmail_data['error'] = 'ไม่สามารถรีเฟรชข้อมูลอีเมลได้: ' . $e->getMessage();
+                $alert_type = 'error';
+                $alert_message = $gmail_data['error'];
+                $show_alert = true;
+            }
+        } else {
+            $alert_type = 'error';
+            $alert_message = 'ไม่พบ token การเข้าถึง กรุณาเชื่อมต่อใหม่';
             $show_alert = true;
         }
     }
@@ -126,6 +288,10 @@ if (isset($_GET['google_connect']) && $_GET['google_connect'] == 'success') {
     $alert_type = 'success';
     $alert_message = 'เชื่อมต่อบัญชี Google สำเร็จ!';
     $show_alert = true;
+    
+    // รีโหลดข้อมูล Gmail หลังจากเชื่อมต่อสำเร็จ
+    header("Location: index.php?page=student_profile");
+    exit;
 } elseif (isset($_GET['google_connect']) && $_GET['google_connect'] == 'error') {
     $alert_type = 'error';
     $alert_message = 'ไม่สามารถเชื่อมต่อบัญชี Google ได้';
@@ -237,14 +403,19 @@ if (isset($_GET['google_connect']) && $_GET['google_connect'] == 'success') {
                         คุณได้เชื่อมต่อบัญชี Google กับระบบแล้ว
                     </div>
                     <p>คุณสามารถใช้ Google Sign-In เพื่อเข้าสู่ระบบในครั้งต่อไปได้</p>
-                    <!-- <button type="button" class="btn btn-outline-danger" onclick="confirmGoogleDisconnect()">
-                        <i class="fas fa-unlink me-2"></i>ยกเลิกการเชื่อมต่อ
-                    </button> -->
+                    
+                    <?php if($gmail_data['needs_reconnect'] || $gmail_data['token_expired']): ?>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            การเชื่อมต่อหมดอายุแล้ว กรุณาเชื่อมต่อใหม่
+                        </div>
+                        <button type="button" class="btn btn-warning" onclick="confirmGoogleReconnect()">
+                            <i class="fas fa-sync-alt me-2"></i>เชื่อมต่อใหม่
+                        </button>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
-
-        
 
         <!-- Gmail Information -->
         <?php if(!empty($student['google_id'])): ?>
@@ -253,14 +424,16 @@ if (isset($_GET['google_connect']) && $_GET['google_connect'] == 'success') {
                 <h5 class="card-title mb-0">
                     <i class="fas fa-envelope me-2"></i>ข้อมูล Gmail
                 </h5>
+                <?php if(!$gmail_data['needs_reconnect'] && !$gmail_data['token_expired']): ?>
                 <form method="post" style="display: inline;">
                     <button type="submit" name="refresh_gmail" class="btn btn-outline-light btn-sm" title="รีเฟรชข้อมูล">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
             <div class="card-body">
-                <?php if($gmail_data['connected'] && !$gmail_data['error']): ?>
+                <?php if($gmail_data['connected'] && !$gmail_data['error'] && !$gmail_data['needs_reconnect']): ?>
                     <!-- สถิติอีเมล -->
                     <div class="row text-center mb-3">
                         <div class="col-12">
@@ -318,21 +491,24 @@ if (isset($_GET['google_connect']) && $_GET['google_connect'] == 'success') {
                         </div>
                     <?php endif; ?>
                     
-                <?php elseif($gmail_data['error']): ?>
+                <?php elseif($gmail_data['error'] || $gmail_data['needs_reconnect'] || $gmail_data['token_expired']): ?>
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        <?php echo $gmail_data['error']; ?>
+                        <?php echo $gmail_data['error'] ?: 'การเชื่อมต่อหมดอายุ กรุณาเชื่อมต่อใหม่'; ?>
                     </div>
                     <p class="small text-muted">
                         กรุณาลองเชื่อมต่อบัญชี Google ใหม่หรือตรวจสอบการอนุญาตการเข้าถึง Gmail
                     </p>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="confirmGoogleConnect()">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="confirmGoogleReconnect()">
                         <i class="fab fa-google me-2"></i>เชื่อมต่อใหม่
                     </button>
                 <?php else: ?>
                     <div class="text-center text-muted">
                         <i class="fas fa-plug fa-2x mb-2"></i>
                         <p>กรุณาเชื่อมต่อบัญชี Google เพื่อดูข้อมูลอีเมล</p>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="confirmGoogleConnect()">
+                            <i class="fab fa-google me-2"></i>เชื่อมต่อบัญชี Google
+                        </button>
                     </div>
                 <?php endif; ?>
             </div>
@@ -347,7 +523,7 @@ if (isset($_GET['google_connect']) && $_GET['google_connect'] == 'success') {
 document.addEventListener('DOMContentLoaded', function() {
     Swal.fire({
         icon: '<?php echo $alert_type; ?>',
-        title: '<?php echo $alert_type == "success" ? "สำเร็จ!" : "เกิดข้อผิดพลาด!"; ?>',
+        title: '<?php echo $alert_type == "success" ? "สำเร็จ!" : ($alert_type == "warning" ? "คำเตือน!" : "เกิดข้อผิดพลาด!"); ?>',
         text: '<?php echo $alert_message; ?>',
         confirmButtonText: 'ตกลง',
         timer: <?php echo $alert_type == "success" ? "3000" : "0"; ?>,
@@ -388,7 +564,6 @@ document.getElementById('profileForm').addEventListener('submit', function(e) {
     });
 });
 
-
 // ยืนยันการเชื่อมต่อ Google
 function confirmGoogleConnect() {
     Swal.fire({
@@ -414,8 +589,37 @@ function confirmGoogleConnect() {
                 }
             });
             
-            // เปลี่ยนจาก from_profile=true เป็น from_profile=1
             window.location.href = '?page=google_login&user_type=student&from_profile=1';
+        }
+    });
+}
+
+// ยืนยันการเชื่อมต่อใหม่ (เมื่อ token หมดอายุ)
+function confirmGoogleReconnect() {
+    Swal.fire({
+        title: 'เชื่อมต่อบัญชี Google ใหม่',
+        html: 'การเชื่อมต่อของคุณหมดอายุแล้ว<br>คุณต้องการเชื่อมต่อใหม่หรือไม่?<br><small class="text-muted">ระบบจะขออนุญาตเข้าถึงอีเมลในบัญชี Gmail ของคุณอีกครั้ง</small>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-sync-alt me-2"></i>เชื่อมต่อใหม่',
+        cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // แสดง loading
+            Swal.fire({
+                title: 'กำลังเชื่อมต่อใหม่...',
+                text: 'กรุณารอสักครู่',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            window.location.href = '?page=google_login&user_type=student&from_profile=1&reconnect=1';
         }
     });
 }
@@ -501,9 +705,50 @@ document.getElementById('phone').addEventListener('blur', function() {
     }
 });
 
-// Auto refresh Gmail data every 5 minutes
-<?php if(!empty($student['google_id']) && $gmail_data['connected']): ?>
+// ตรวจสอบสถานะ token อัตโนมัติ
+function checkTokenStatus() {
+    <?php if(!empty($student['google_id'])): ?>
+    fetch('?page=check_token_status', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'check_token=1'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.expired || data.needs_reconnect) {
+            // แสดงการแจ้งเตือนว่า token หมดอายุ
+            if (!document.querySelector('.token-expired-warning')) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'alert alert-warning token-expired-warning mt-3';
+                warningDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    การเชื่อมต่อ Gmail หมดอายุแล้ว 
+                    <button type="button" class="btn btn-warning btn-sm ms-2" onclick="confirmGoogleReconnect()">
+                        <i class="fas fa-sync-alt me-1"></i>เชื่อมต่อใหม่
+                    </button>
+                `;
+                
+                const gmailCard = document.querySelector('.card .bg-success').closest('.card');
+                if (gmailCard) {
+                    gmailCard.appendChild(warningDiv);
+                }
+            }
+        }
+    })
+    .catch(error => {
+        console.log('Token status check failed:', error);
+    });
+    <?php endif; ?>
+}
+
+// Auto refresh Gmail data every 5 minutes (หากไม่หมดอายุ)
+<?php if(!empty($student['google_id']) && $gmail_data['connected'] && !$gmail_data['needs_reconnect']): ?>
 setInterval(function() {
+    // ตรวจสอบสถานะ token ก่อน
+    checkTokenStatus();
+    
     // ส่งคำขอ refresh อีเมลในเบื้องหลัง
     fetch('?page=student_profile', {
         method: 'POST',
@@ -520,6 +765,13 @@ setInterval(function() {
         console.log('Auto refresh failed:', error);
     });
 }, 300000); // 5 minutes = 300000ms
+<?php endif; ?>
+
+// ตรวจสอบสถานะ token ทุก 1 นาที
+<?php if(!empty($student['google_id'])): ?>
+setInterval(function() {
+    checkTokenStatus();
+}, 60000); // 1 minute = 60000ms
 <?php endif; ?>
 
 // เพิ่มฟังก์ชันสำหรับ mark email as read (ถ้าต้องการ)
@@ -542,7 +794,7 @@ function markEmailAsRead(emailId) {
 
 // เพิ่มฟังก์ชันสำหรับดู notification เมื่อมีอีเมลใหม่
 function checkNewEmails() {
-    <?php if(!empty($student['google_id']) && $gmail_data['connected']): ?>
+    <?php if(!empty($student['google_id']) && $gmail_data['connected'] && !$gmail_data['needs_reconnect']): ?>
     const currentUnreadCount = <?php echo $gmail_data['unread_count']; ?>;
     
     // สร้าง notification เมื่อมีอีเมลที่ยังไม่ได้อ่าน
@@ -569,13 +821,32 @@ document.addEventListener('DOMContentLoaded', function() {
     checkNewEmails();
     
     // เพิ่ม badge indicator สำหรับอีเมลที่ยังไม่ได้อ่าน
-    <?php if(!empty($student['google_id']) && $gmail_data['connected'] && $gmail_data['unread_count'] > 0): ?>
+    <?php if(!empty($student['google_id']) && $gmail_data['connected'] && $gmail_data['unread_count'] > 0 && !$gmail_data['needs_reconnect']): ?>
     document.title = `(${<?php echo $gmail_data['unread_count']; ?>}) โปรไฟล์นักศึกษา`;
+    <?php endif; ?>
+    
+    // ตรวจสอบสถานะ token เมื่อโหลดหน้า
+    <?php if(!empty($student['google_id'])): ?>
+    setTimeout(checkTokenStatus, 2000); // ตรวจสอบหลังจากโหลดหน้าเสร็จ 2 วินาที
     <?php endif; ?>
 });
 
 // เพิ่มฟังก์ชันสำหรับการส่งอีเมล (ถ้าต้องการในอนาคต)
 function composeEmail() {
+    <?php if($gmail_data['needs_reconnect'] || $gmail_data['token_expired']): ?>
+    Swal.fire({
+        icon: 'error',
+        title: 'ไม่สามารถส่งอีเมลได้',
+        text: 'การเชื่อมต่อ Gmail หมดอายุแล้ว กรุณาเชื่อมต่อใหม่',
+        confirmButtonText: 'เชื่อมต่อใหม่'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            confirmGoogleReconnect();
+        }
+    });
+    return;
+    <?php endif; ?>
+    
     Swal.fire({
         title: 'เขียนอีเมลใหม่',
         html: `
@@ -619,6 +890,20 @@ function composeEmail() {
 
 // เพิ่มฟังก์ชันสำหรับการค้นหาอีเมล
 function searchEmails() {
+    <?php if($gmail_data['needs_reconnect'] || $gmail_data['token_expired']): ?>
+    Swal.fire({
+        icon: 'error',
+        title: 'ไม่สามารถค้นหาได้',
+        text: 'การเชื่อมต่อ Gmail หมดอายุแล้ว กรุณาเชื่อมต่อใหม่',
+        confirmButtonText: 'เชื่อมต่อใหม่'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            confirmGoogleReconnect();
+        }
+    });
+    return;
+    <?php endif; ?>
+    
     Swal.fire({
         title: 'ค้นหาอีเมล',
         input: 'text',
@@ -637,6 +922,49 @@ function searchEmails() {
             window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(result.value)}`, '_blank');
         }
     });
+}
+
+// เพิ่มฟังก์ชันสำหรับการแสดงสถานะการเชื่อมต่อ
+function showConnectionStatus() {
+    <?php if(!empty($student['google_id'])): ?>
+    const status = {
+        connected: <?php echo $gmail_data['connected'] ? 'true' : 'false'; ?>,
+        expired: <?php echo $gmail_data['token_expired'] ? 'true' : 'false'; ?>,
+        needs_reconnect: <?php echo $gmail_data['needs_reconnect'] ? 'true' : 'false'; ?>,
+        error: '<?php echo addslashes($gmail_data['error'] ?? ''); ?>'
+    };
+    
+    let statusText = '';
+    let statusIcon = '';
+    
+    if (status.connected && !status.expired && !status.needs_reconnect) {
+        statusText = 'เชื่อมต่อสำเร็จ และพร้อมใช้งาน';
+        statusIcon = 'success';
+    } else if (status.expired || status.needs_reconnect) {
+        statusText = 'การเชื่อมต่อหมดอายุแล้ว กรุณาเชื่อมต่อใหม่';
+        statusIcon = 'warning';
+    } else if (status.error) {
+        statusText = 'เกิดข้อผิดพลาด: ' + status.error;
+        statusIcon = 'error';
+    } else {
+        statusText = 'ไม่ทราบสถานะการเชื่อมต่อ';
+        statusIcon = 'info';
+    }
+    
+    Swal.fire({
+        icon: statusIcon,
+        title: 'สถานะการเชื่อมต่อ Gmail',
+        text: statusText,
+        confirmButtonText: 'ตกลง'
+    });
+    <?php else: ?>
+    Swal.fire({
+        icon: 'info',
+        title: 'สถานะการเชื่อมต่อ Gmail',
+        text: 'ยังไม่ได้เชื่อมต่อบัญชี Google',
+        confirmButtonText: 'ตกลง'
+    });
+    <?php endif; ?>
 }
 </script>
 
@@ -788,5 +1116,64 @@ function searchEmails() {
 
 .alert-success.alert-permanent {
     border-left-color: #198754;
+}
+
+/* Style สำหรับ token expired warning */
+.token-expired-warning {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Style สำหรับ connection status indicator */
+.connection-status {
+    position: relative;
+}
+
+.connection-status::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.connection-status.connected::before {
+    background-color: #28a745;
+}
+
+.connection-status.expired::before {
+    background-color: #ffc107;
+}
+
+.connection-status.error::before {
+    background-color: #dc3545;
+}
+
+/* เพิ่ม pulse animation สำหรับ warning */
+.alert-warning {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+
+/* Style สำหรับ Gmail card เมื่อ token หมดอายุ */
+.card.token-expired {
+    border-left: 4px solid #ffc107;
+}
+
+.card.token-expired .card-header {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
 }
 </style>
