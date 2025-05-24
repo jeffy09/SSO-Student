@@ -24,6 +24,124 @@ if ($page === 'check_google_config') {
     exit;
 }
 
+// ตรวจสอบ API สำหรับตรวจสอบสถานะ Token (เพิ่มใหม่)
+if ($page === 'check_token_status') {
+    if (!isset($_SESSION['student_id'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    
+    // ตรวจสอบว่าเป็น POST request
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit;
+    }
+    
+    // Set content type เป็น JSON
+    header('Content-Type: application/json');
+    
+    try {
+        $student_id = $_SESSION['student_id'];
+        
+        // ดึงข้อมูล token จากฐานข้อมูล
+        $query = "SELECT google_id, google_access_token, google_refresh_token, token_expires_at FROM students WHERE id = :id";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':id', $student_id);
+        $stmt->execute();
+        
+        if ($stmt->rowCount() === 0) {
+            echo json_encode([
+                'connected' => false,
+                'expired' => false,
+                'needs_reconnect' => false,
+                'message' => 'ไม่พบข้อมูลผู้ใช้'
+            ]);
+            exit;
+        }
+        
+        $student = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // ตรวจสอบว่ามีการเชื่อมต่อ Google หรือไม่
+        if (empty($student['google_id'])) {
+            echo json_encode([
+                'connected' => false,
+                'expired' => false,
+                'needs_reconnect' => false,
+                'message' => 'ยังไม่ได้เชื่อมต่อบัญชี Google'
+            ]);
+            exit;
+        }
+        
+        // ตรวจสอบว่ามี access token หรือไม่
+        if (empty($student['google_access_token'])) {
+            echo json_encode([
+                'connected' => true,
+                'expired' => true,
+                'needs_reconnect' => true,
+                'message' => 'ไม่มี access token'
+            ]);
+            exit;
+        }
+        
+        // ตรวจสอบวันหมดอายุ
+        if (!empty($student['token_expires_at'])) {
+            $expires_at = new DateTime($student['token_expires_at']);
+            $now = new DateTime();
+            
+            $time_diff = $expires_at->getTimestamp() - $now->getTimestamp();
+            
+            if ($time_diff <= 0) {
+                // Token หมดอายุแล้ว
+                echo json_encode([
+                    'connected' => true,
+                    'expired' => true,
+                    'needs_reconnect' => true,
+                    'message' => 'Token หมดอายุแล้ว',
+                    'expired_at' => $student['token_expires_at']
+                ]);
+                exit;
+            } elseif ($time_diff <= 300) {
+                // ใกล้หมดอายุ (เหลือน้อยกว่า 5 นาที)
+                echo json_encode([
+                    'connected' => true,
+                    'expired' => false,
+                    'needs_reconnect' => false,
+                    'near_expiry' => true,
+                    'message' => 'Token ใกล้หมดอายุ',
+                    'expires_in' => $time_diff,
+                    'expired_at' => $student['token_expires_at']
+                ]);
+                exit;
+            }
+        }
+        
+        // Token ยังใช้ได้
+        echo json_encode([
+            'connected' => true,
+            'expired' => false,
+            'needs_reconnect' => false,
+            'message' => 'Token ยังใช้ได้',
+            'expires_at' => $student['token_expires_at']
+        ]);
+        
+    } catch(PDOException $e) {
+        http_response_code(500);
+        echo json_encode([
+            'error' => 'Database error',
+            'message' => 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล'
+        ]);
+    } catch(Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            'error' => 'Server error',
+            'message' => 'เกิดข้อผิดพลาดในเซิร์ฟเวอร์'
+        ]);
+    }
+    exit;
+}
+
 // ส่วนหัวของเว็บไซต์ (Header)
 include_once 'includes/header.php';
 
@@ -166,3 +284,4 @@ switch ($page) {
 
 // ส่วนท้ายของเว็บไซต์ (Footer)
 include_once 'includes/footer.php';
+?>
