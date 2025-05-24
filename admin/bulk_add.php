@@ -18,38 +18,77 @@ $alert_type = '';
 $alert_message = '';
 $show_alert = false;
 
+// เพิ่มฟังก์ชันสำหรับ log การทำงาน
+function logBulkAdd($message) {
+    $log_dir = 'logs';
+    if (!is_dir($log_dir)) {
+        mkdir($log_dir, 0755, true);
+    }
+    
+    $log_file = $log_dir . '/bulk_add_' . date('Y-m-d') . '.log';
+    $log_message = '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n";
+    
+    file_put_contents($log_file, $log_message, FILE_APPEND);
+}
+
 // หากมีการ submit form
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
+    logBulkAdd("Bulk add process started by admin ID: " . $_SESSION['admin_id']);
+    
     try {
         // ตรวจสอบไฟล์ที่อัปโหลด
         $file = $_FILES['csv_file'];
         
+        logBulkAdd("File upload attempt - Name: " . $file['name'] . ", Size: " . $file['size'] . ", Error: " . $file['error']);
+        
         // ตรวจสอบข้อผิดพลาด
         if ($file['error'] !== UPLOAD_ERR_OK) {
-            throw new Exception("เกิดข้อผิดพลาดในการอัปโหลดไฟล์");
+            $error_messages = [
+                UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินที่กำหนดในเซิร์ฟเวอร์',
+                UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินที่กำหนดในฟอร์ม',
+                UPLOAD_ERR_PARTIAL => 'ไฟล์อัปโหลดไม่สมบูรณ์',
+                UPLOAD_ERR_NO_FILE => 'ไม่มีไฟล์ถูกอัปโหลด',
+                UPLOAD_ERR_NO_TMP_DIR => 'ไม่พบโฟลเดอร์ชั่วคราว',
+                UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
+                UPLOAD_ERR_EXTENSION => 'การอัปโหลดถูกหยุดโดย extension'
+            ];
+            
+            $error_msg = isset($error_messages[$file['error']]) ? $error_messages[$file['error']] : "เกิดข้อผิดพลาดในการอัปโหลดไฟล์ (Error: " . $file['error'] . ")";
+            logBulkAdd("Upload error: " . $error_msg);
+            throw new Exception($error_msg);
+        }
+        
+        // ตรวจสอบว่ามีไฟล์ถูกอัปโหลดจริง
+        if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+            logBulkAdd("No file uploaded or invalid upload");
+            throw new Exception("ไม่พบไฟล์ที่อัปโหลดหรือไฟล์ไม่ถูกต้อง");
         }
         
         // ตรวจสอบนามสกุลไฟล์
         $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if ($file_ext !== 'csv') {
+            logBulkAdd("Invalid file extension: " . $file_ext);
             throw new Exception("กรุณาอัปโหลดไฟล์ CSV เท่านั้น");
         }
         
         // ตรวจสอบขนาดไฟล์ (2MB)
         if ($file['size'] > 2 * 1024 * 1024) {
+            logBulkAdd("File too large: " . $file['size'] . " bytes");
             throw new Exception("ขนาดไฟล์เกิน 2MB");
         }
         
-        // อ่านข้อมูลจากไฟล์ CSV ด้วย fopen เพื่อหลีกเลี่ยงปัญหา encoding
+        // ตรวจสอบว่าไฟล์เป็น CSV จริงๆ โดยลองอ่านบรรทัดแรก
         $handle = fopen($file['tmp_name'], 'r');
         if (!$handle) {
+            logBulkAdd("Cannot open uploaded file");
             throw new Exception("ไม่สามารถอ่านไฟล์ได้");
         }
         
         // อ่านส่วนหัว (header) และทำความสะอาด
         $header = fgetcsv($handle);
-        if (!$header) {
+        if (!$header || empty($header)) {
             fclose($handle);
+            logBulkAdd("Empty or invalid CSV header");
             throw new Exception("ไฟล์ CSV ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง");
         }
         
@@ -61,8 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
             return trim($col);
         }, $header);
         
-        // Debug: แสดง header ที่อ่านได้
-        error_log("Header found: " . print_r($header, true));
+        logBulkAdd("CSV header found: " . implode(', ', $header));
         
         // ตรวจสอบว่ามีคอลัมน์ที่จำเป็นหรือไม่
         $required_columns = ['student_id', 'id_card', 'firstname', 'lastname', 'email', 'faculty'];
@@ -76,11 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
         
         if (!empty($missing_columns)) {
             fclose($handle);
-            throw new Exception("ไฟล์ CSV ขาดคอลัมน์ที่จำเป็น: " . implode(', ', $missing_columns) . "\nคอลัมน์ที่พบ: " . implode(', ', $header));
+            $error_msg = "ไฟล์ CSV ขาดคอลัมน์ที่จำเป็น: " . implode(', ', $missing_columns) . "\nคอลัมน์ที่พบ: " . implode(', ', $header);
+            logBulkAdd($error_msg);
+            throw new Exception($error_msg);
         }
         
         // เริ่ม transaction
         $db->beginTransaction();
+        logBulkAdd("Database transaction started");
         
         $row_number = 1; // เริ่มนับจากแถวที่ 2 (แถวแรกเป็น header)
         
@@ -216,12 +257,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
             // Execute
             if ($insert_stmt->execute()) {
                 $success_count++;
+                logBulkAdd("Successfully inserted student: " . $student_id);
             } else {
+                $error_info = $insert_stmt->errorInfo();
                 $error_rows[] = [
                     'row' => $row_number,
                     'data' => implode(',', $data),
-                    'error' => "ไม่สามารถบันทึกข้อมูลได้: " . implode(', ', $insert_stmt->errorInfo())
+                    'error' => "ไม่สามารถบันทึกข้อมูลได้: " . $error_info[2]
                 ];
+                logBulkAdd("Failed to insert student: " . $student_id . " - " . $error_info[2]);
             }
         }
         
@@ -235,25 +279,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
         $log_stmt->bindParam(':action', $log_action);
         $log_stmt->execute();
         
+        logBulkAdd("Admin log saved: " . $log_action);
+        
         // Commit transaction
         $db->commit();
+        logBulkAdd("Database transaction committed successfully");
         
         // กำหนดข้อความแจ้งเตือนสำเร็จ
         $import_success = true;
         $alert_type = 'success';
         $alert_message = "นำเข้าข้อมูลสำเร็จ {$success_count} รายการ จากทั้งหมด {$total_rows} รายการ";
+        
+        if (count($error_rows) > 0) {
+            $alert_message .= " (มีข้อผิดพลาด " . count($error_rows) . " รายการ)";
+        }
+        
         $show_alert = true;
+        
+        logBulkAdd("Bulk add process completed successfully");
         
     } catch(Exception $e) {
         // Rollback transaction ในกรณีที่เกิดข้อผิดพลาด
-        if ($db->inTransaction()) {
+        if (isset($db) && $db->inTransaction()) {
             $db->rollBack();
+            logBulkAdd("Database transaction rolled back due to error");
         }
+        
         $alert_type = 'error';
         $alert_message = $e->getMessage();
         $show_alert = true;
+        
+        logBulkAdd("Bulk add process failed: " . $e->getMessage());
     }
 }
+
+// เพิ่มการตรวจสอบ PHP settings
+$max_file_size = ini_get('upload_max_filesize');
+$max_post_size = ini_get('post_max_size');
+$memory_limit = ini_get('memory_limit');
+
+logBulkAdd("PHP Settings - upload_max_filesize: $max_file_size, post_max_size: $max_post_size, memory_limit: $memory_limit");
 ?>
 
 <!-- เพิ่ม SweetAlert2 CSS และ JS -->
@@ -269,6 +334,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
         <a href="?page=admin_users" class="btn btn-secondary">
             <i class="fas fa-arrow-left me-2"></i>กลับไปยังรายการผู้ใช้งาน
         </a>
+    </div>
+</div>
+
+<!-- แสดง PHP Configuration Info -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <small>
+                <strong>การตั้งค่าเซิร์ฟเวอร์:</strong> 
+                ขนาดไฟล์สูงสุด: <?php echo $max_file_size; ?> | 
+                ขนาด POST สูงสุด: <?php echo $max_post_size; ?> | 
+                หน่วยความจำ: <?php echo $memory_limit; ?>
+            </small>
+        </div>
     </div>
 </div>
 
@@ -289,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                         <div class="form-text">
                             <strong>คอลัมน์ที่จำเป็น:</strong> student_id, id_card, firstname, lastname, email, faculty<br>
                             <strong>คอลัมน์เพิ่มเติม:</strong> department, phone, address<br>
-                            <strong>ขนาดไฟล์สูงสุด:</strong> 2MB<br>
+                            <strong>ขนาดไฟล์สูงสุด:</strong> <?php echo $max_file_size; ?><br>
                             <strong>หมายเหตุ:</strong> รหัสบัตรประชาชนจะถูกเข้ารหัสอัตโนมัติ
                         </div>
                     </div>
@@ -333,9 +412,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                     <?php if(count($error_rows) > 0): ?>
                         <div class="alert alert-warning">
                             <h6><i class="fas fa-exclamation-triangle me-2"></i>รายการที่เกิดข้อผิดพลาด:</h6>
-                            <div class="table-responsive">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                                 <table class="table table-sm table-bordered mt-2">
-                                    <thead class="table-light">
+                                    <thead class="table-light sticky-top">
                                         <tr>
                                             <th width="10%">แถวที่</th>
                                             <th width="50%">ข้อมูล</th>
@@ -347,7 +426,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                                             <tr>
                                                 <td><?php echo $row['row']; ?></td>
                                                 <td><code class="small"><?php echo htmlspecialchars($row['data']); ?></code></td>
-                                                <td><span class="text-danger"><?php echo $row['error']; ?></span></td>
+                                                <td><span class="text-danger small"><?php echo $row['error']; ?></span></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -410,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                         <li><strong>รหัสบัตรประชาชน:</strong> ต้องเป็นตัวเลข 13 หลัก (จะถูกเข้ารหัสอัตโนมัติ)</li>
                         <li><strong>อีเมล:</strong> ต้องมีรูปแบบที่ถูกต้อง</li>
                         <li><strong>Encoding:</strong> UTF-8 สำหรับภาษาไทย</li>
-                        <li><strong>ขนาดไฟล์:</strong> สูงสุด 2MB</li>
+                        <li><strong>ขนาดไฟล์:</strong> สูงสุด <?php echo $max_file_size; ?></li>
                     </ul>
                 </div>
                 
@@ -464,7 +543,19 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
         return;
     }
     
-    if (file.size > 2 * 1024 * 1024) {
+    // ตรวจสอบนามสกุลไฟล์
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.csv')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'ไฟล์ไม่ถูกต้อง',
+            text: 'กรุณาเลือกไฟล์ CSV เท่านั้น'
+        });
+        return;
+    }
+    
+    // ตรวจสอบขนาดไฟล์ (2MB = 2097152 bytes)
+    if (file.size > 2097152) {
         Swal.fire({
             icon: 'error',
             title: 'ไฟล์ใหญ่เกินไป',
@@ -473,9 +564,21 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
         return;
     }
     
+    // ตรวจสอบว่าไฟล์ไม่ว่าง
+    if (file.size === 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'ไฟล์ว่าง',
+            text: 'ไฟล์ที่เลือกไม่มีข้อมูล'
+        });
+        return;
+    }
+    
     Swal.fire({
         title: 'ยืนยันการอัปโหลด',
-        html: `คุณต้องการอัปโหลดและนำเข้าข้อมูลจากไฟล์ ${file.name} หรือไม่?<br><br><small class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i><strong>หมายเหตุ:</strong> รหัสบัตรประชาชนจะถูกเข้ารหัสอัตโนมัติเพื่อความปลอดภัย</small>`,
+        html: `คุณต้องการอัปโหลดและนำเข้าข้อมูลจากไฟล์ <strong>${file.name}</strong> หรือไม่?<br><br>
+               <small class="text-muted">ขนาดไฟล์: ${(file.size / 1024).toFixed(2)} KB</small><br>
+               <small class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i><strong>หมายเหตุ:</strong> รหัสบัตรประชาชนจะถูกเข้ารหัสอัตโนมัติเพื่อความปลอดภัย</small>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -487,12 +590,40 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
             // แสดง loading
             Swal.fire({
                 title: 'กำลังประมวลผลไฟล์...',
-                text: 'กรุณารอสักครู่ ระบบกำลังอ่านและนำเข้าข้อมูล (รวมทั้งเข้ารหัสรหัสบัตรประชาชน)',
+                html: `
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">กำลังโหลด...</span>
+                        </div>
+                        <br><br>
+                        <p>กรุณารอสักครู่ ระบบกำลังอ่านและนำเข้าข้อมูล</p>
+                        <small class="text-muted">รวมทั้งเข้ารหัสรหัสบัตรประชาชน</small>
+                    </div>
+                `,
                 allowOutsideClick: false,
                 allowEscapeKey: false,
                 showConfirmButton: false,
                 didOpen: () => {
-                    Swal.showLoading();
+                    // เพิ่ม progress bar simulation
+                    let progress = 0;
+                    const progressBar = document.createElement('div');
+                    progressBar.className = 'progress mt-3';
+                    progressBar.innerHTML = '<div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>';
+                    
+                    const popup = Swal.getPopup();
+                    popup.querySelector('.swal2-html-container').appendChild(progressBar);
+                    
+                    const interval = setInterval(() => {
+                        progress += Math.random() * 10;
+                        if (progress > 90) progress = 90;
+                        
+                        const bar = progressBar.querySelector('.progress-bar');
+                        bar.style.width = progress + '%';
+                        
+                        if (progress >= 90) {
+                            clearInterval(interval);
+                        }
+                    }, 200);
                 }
             });
             
@@ -585,6 +716,17 @@ document.getElementById('csv_file').addEventListener('change', function() {
             return;
         }
         
+        // ตรวจสอบว่าไฟล์ไม่ว่าง
+        if (file.size === 0) {
+            Swal.fire({
+                icon: 'error',
+                title: 'ไฟล์ว่าง',
+                text: 'ไฟล์ที่เลือกไม่มีข้อมูล'
+            });
+            this.value = '';
+            return;
+        }
+        
         // แสดงข้อมูลไฟล์
         const fileSize = (file.size / 1024).toFixed(2);
         Swal.fire({
@@ -596,6 +738,107 @@ document.getElementById('csv_file').addEventListener('change', function() {
                    <small class="text-warning"><i class="fas fa-shield-alt me-1"></i>รหัสบัตรประชาชนจะถูกเข้ารหัสอัตโนมัติ</small>`,
             timer: 3000,
             timerProgressBar: true
+        });
+    }
+});
+
+// เพิ่มการตรวจสอบ drag & drop
+const uploadForm = document.getElementById('uploadForm');
+const fileInput = document.getElementById('csv_file');
+
+// เพิ่ม drag & drop functionality
+uploadForm.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.add('border-primary');
+});
+
+uploadForm.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('border-primary');
+});
+
+uploadForm.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('border-primary');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.name.toLowerCase().endsWith('.csv')) {
+            fileInput.files = files;
+            
+            // Trigger change event
+            const event = new Event('change', { bubbles: true });
+            fileInput.dispatchEvent(event);
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'ไฟล์ไม่ถูกต้อง',
+                text: 'กรุณาใช้ไฟล์ CSV เท่านั้น'
+            });
+        }
+    }
+});
+
+// แสดงสถานะการประมวลผล
+function showProcessingStatus() {
+    const processingSteps = [
+        'กำลังอ่านไฟล์ CSV...',
+        'กำลังตรวจสอบข้อมูล...',
+        'กำลังเข้ารหัสรหัสผ่าน...',
+        'กำลังบันทึกลงฐานข้อมูล...',
+        'กำลังตรวจสอบข้อมูลซ้ำ...'
+    ];
+    
+    let currentStep = 0;
+    const stepInterval = setInterval(() => {
+        if (currentStep < processingSteps.length) {
+            const popup = Swal.getPopup();
+            const statusElement = popup.querySelector('#processing-status');
+            if (statusElement) {
+                statusElement.textContent = processingSteps[currentStep];
+            }
+            currentStep++;
+        } else {
+            clearInterval(stepInterval);
+        }
+    }, 1000);
+}
+
+// เพิ่ม validation สำหรับฟอร์ม
+function validateCSVFile(file) {
+    const errors = [];
+    
+    if (!file) {
+        errors.push('กรุณาเลือกไฟล์');
+    } else {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            errors.push('ไฟล์ต้องเป็นนามสกุล .csv เท่านั้น');
+        }
+        
+        if (file.size > 2 * 1024 * 1024) {
+            errors.push('ขนาดไฟล์ต้องไม่เกิน 2MB');
+        }
+        
+        if (file.size === 0) {
+            errors.push('ไฟล์ต้องไม่เป็นไฟล์ว่าง');
+        }
+    }
+    
+    return errors;
+}
+
+// เพิ่มการตรวจสอบ browser compatibility
+document.addEventListener('DOMContentLoaded', function() {
+    // ตรวจสอบว่า browser รองรับ File API หรือไม่
+    if (!window.File || !window.FileReader || !window.FileList || !window.Blob) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'เบราว์เซอร์ไม่รองรับ',
+            text: 'เบราว์เซอร์ของคุณไม่รองรับการอัปโหลดไฟล์ กรุณาใช้เบราว์เซอร์ที่ใหม่กว่า'
         });
     }
 });
