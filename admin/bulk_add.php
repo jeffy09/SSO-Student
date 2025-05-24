@@ -619,6 +619,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
                         
                         const bar = progressBar.querySelector('.progress-bar');
                         bar.style.width = progress + '%';
+                        bar.setAttribute('aria-valuenow', progress);
                         
                         if (progress >= 90) {
                             clearInterval(interval);
@@ -688,7 +689,7 @@ function downloadErrorReport() {
     <?php endif; ?>
 }
 
-// ตรวจสอบไฟล์ก่อนอัปโหลด
+// ตรวจสอบไฟล์ก่อนอัพโหลด
 document.getElementById('csv_file').addEventListener('change', function() {
     const file = this.files[0];
     
