@@ -13,20 +13,28 @@ if (!isset($_SESSION['student_id'])) {
     exit;
 }
 
-// ดึงข้อมูลนักศึกษา
+// ดึงข้อมูลนักศึกษาและข้อมูลระบบ
 try {
-    $query = "SELECT * FROM students WHERE id = :id LIMIT 0,1";
-    $stmt = $db->prepare($query);
-    $stmt->bindParam(':id', $_SESSION['student_id']);
-    $stmt->execute();
+    // ดึงข้อมูลนักศึกษา
+    $query_student = "SELECT * FROM students WHERE id = :id LIMIT 0,1";
+    $stmt_student = $db->prepare($query_student);
+    $stmt_student->bindParam(':id', $_SESSION['student_id']);
+    $stmt_student->execute();
     
-    if ($stmt->rowCount() > 0) {
-        $student = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($stmt_student->rowCount() > 0) {
+        $student = $stmt_student->fetch(PDO::FETCH_ASSOC);
     } else {
-        // หากไม่พบข้อมูล ให้ logout
         header("Location: index.php?page=logout");
         exit;
     }
+
+    // ดึงข้อมูลระบบ
+    $query_systems = "SELECT * FROM student_systems WHERE student_id = :student_id ORDER BY system_name";
+    $stmt_systems = $db->prepare($query_systems);
+    $stmt_systems->bindParam(':student_id', $student['id']);
+    $stmt_systems->execute();
+    $systems = $stmt_systems->fetchAll(PDO::FETCH_ASSOC);
+
 } catch(PDOException $e) {
     $error_message = "เกิดข้อผิดพลาด: " . $e->getMessage();
 }
@@ -35,9 +43,15 @@ try {
 <div class="row">
     <div class="col-md-12 mb-4">
         <h2>แดชบอร์ด</h2>
-        <p>ยินดีต้อนรับ, <?php echo $_SESSION['student_name']; ?></p>
+        <p>ยินดีต้อนรับ, <?php echo htmlspecialchars($_SESSION['student_name']); ?></p>
     </div>
 </div>
+
+<?php if (isset($error_message)): ?>
+    <div class="alert alert-danger" role="alert">
+        <?php echo $error_message; ?>
+    </div>
+<?php endif; ?>
 
 <div class="row">
     <div class="col-md-6">
@@ -49,23 +63,23 @@ try {
                 <table class="table">
                     <tr>
                         <th>รหัสนักศึกษา:</th>
-                        <td><?php echo $student['student_id']; ?></td>
+                        <td><?php echo htmlspecialchars($student['student_id']); ?></td>
                     </tr>
                     <tr>
                         <th>ชื่อ-นามสกุล:</th>
-                        <td><?php echo $student['firstname'] . ' ' . $student['lastname']; ?></td>
+                        <td><?php echo htmlspecialchars($student['firstname'] . ' ' . $student['lastname']); ?></td>
                     </tr>
                     <tr>
                         <th>อีเมล:</th>
-                        <td><?php echo $student['email']; ?></td>
+                        <td><?php echo htmlspecialchars($student['email']); ?></td>
                     </tr>
                     <tr>
                         <th>คณะ:</th>
-                        <td><?php echo $student['faculty']; ?></td>
+                        <td><?php echo htmlspecialchars($student['faculty']); ?></td>
                     </tr>
                     <tr>
                         <th>สาขา:</th>
-                        <td><?php echo $student['department']; ?></td>
+                        <td><?php echo htmlspecialchars($student['department']); ?></td>
                     </tr>
                 </table>
                 <a href="?page=student_profile" class="btn btn-primary">แก้ไขข้อมูลส่วนตัว</a>
@@ -99,6 +113,42 @@ try {
         </div>
     </div>
 </div>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="card-title mb-0"><i class="fas fa-key me-2"></i>ข้อมูลการเข้าใช้งานระบบต่างๆ</h5>
+    </div>
+    <div class="card-body">
+        <?php if (!empty($systems)): ?>
+            <div class="row">
+                <?php foreach ($systems as $system): ?>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <strong><?php echo htmlspecialchars($system['system_name']); ?></strong>
+                            </div>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item"><strong>Username:</strong> <?php echo htmlspecialchars($system['username']); ?></li>
+                                <li class="list-group-item"><strong>Password:</strong> <?php echo htmlspecialchars($system['initial_password']); ?></li>
+                            </ul>
+                            <div class="card-body text-center">
+                                <a href="<?php echo htmlspecialchars($system['system_url'] ?: '#'); ?>" class="btn btn-sm btn-primary" target="_blank" <?php echo empty($system['system_url']) ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-sign-in-alt me-1"></i> เข้าสู่ระบบ
+                                </a>
+                                <a href="<?php echo htmlspecialchars($system['manual_url'] ?: '#'); ?>" class="btn btn-sm btn-secondary" target="_blank" <?php echo empty($system['manual_url']) ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-book me-1"></i> คู่มือ
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="alert alert-info">ไม่พบข้อมูลการเข้าใช้งานระบบ</div>
+        <?php endif; ?>
+    </div>
+</div>
+
 
 <?php if(isset($_SESSION['show_google_link']) && $_SESSION['show_google_link']): ?>
 <script>
