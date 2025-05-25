@@ -34,20 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // ดึงข้อมูล
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-                // ตรวจสอบรหัสบัตรประชาชน
-                // ถ้ามี password_hash ใช้ password_verify
-                // ถ้าไม่มี (ข้อมูลเก่า) ใช้การเปรียบเทียบแบบเดิมแล้วอัพเดต
                 $password_valid = false;
                 
                 if (!empty($row['password_hash'])) {
-                    // ใช้ password_verify สำหรับรหัสผ่านที่เข้ารหัสแล้ว
                     $password_valid = password_verify($id_card, $row['password_hash']);
                 } else {
-                    // สำหรับข้อมูลเก่าที่ยังไม่เข้ารหัส
                     if ($row['id_card'] == $id_card) {
                         $password_valid = true;
-                        
-                        // อัพเดต password hash สำหรับครั้งต่อไป
                         $password_hash = password_hash($id_card, PASSWORD_DEFAULT);
                         $update_hash_query = "UPDATE students SET password_hash = :password_hash WHERE id = :id";
                         $update_hash_stmt = $db->prepare($update_hash_query);
@@ -58,25 +51,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 
                 if ($password_valid) {
-                    // ล็อกอินสำเร็จ
                     $_SESSION['student_id'] = $row['id'];
                     $_SESSION['student_code'] = $row['student_id'];
                     $_SESSION['student_name'] = $row['firstname'] . ' ' . $row['lastname'];
                     $_SESSION['student_email'] = $row['email'];
                     
-                    // ถ้าเป็นการล็อกอินครั้งแรก และมีอีเมล ให้แสดง modal เชื่อมต่อ Gmail
                     if ($row['first_login'] == 1 && !empty($row['email'])) {
                         $_SESSION['show_google_link'] = true;
                     }
                     
-                    // อัพเดตสถานะการล็อกอินครั้งแรก
                     $update_query = "UPDATE students SET first_login = 0 WHERE id = :id";
                     $update_stmt = $db->prepare($update_query);
                     $update_stmt->bindParam(':id', $row['id']);
                     $update_stmt->execute();
                     
-                    // Redirect ไปยังหน้า dashboard
-                    header("Location: index.php?page=student_profile");
+                    // Redirect ไปยังหน้า dashboard ของนักศึกษา
+                    header("Location: index.php?page=student_dashboard"); // <--- แก้ไขตรงนี้
                     exit;
                 } else {
                     $login_error = "รหัสบัตรประชาชนไม่ถูกต้อง";
@@ -92,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// ดึงข้อความแจ้งเตือนจาก session (ถ้ามี)
 if (isset($_SESSION['auth_error'])) {
     $login_error = $_SESSION['auth_error'];
     unset($_SESSION['auth_error']);
