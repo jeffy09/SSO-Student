@@ -20,33 +20,40 @@ if (!isset($_GET['id'])) {
 try {
     $id = base64_decode($_GET['id']);
     
-    // ตรวจสอบว่า ID เป็นตัวเลขหรือไม่
     if (!is_numeric($id)) {
         throw new Exception("รหัสไม่ถูกต้อง");
     }
     
-    // ดึงข้อมูลนักศึกษา
-    $query = "SELECT * FROM students WHERE id = :id LIMIT 0,1";
-    $stmt = $db->prepare($query);
-    $stmt->bindParam(':id', $id);
-    $stmt->execute();
+    $query_student = "SELECT * FROM students WHERE id = :id LIMIT 0,1";
+    $stmt_student = $db->prepare($query_student);
+    $stmt_student->bindParam(':id', $id);
+    $stmt_student->execute();
     
-    if ($stmt->rowCount() == 0) {
+    if ($stmt_student->rowCount() == 0) {
         throw new Exception("ไม่พบข้อมูลนักศึกษา");
     }
+    $student = $stmt_student->fetch(PDO::FETCH_ASSOC);
+
+    $query_systems = "SELECT * FROM student_systems WHERE student_id = :student_id ORDER BY system_name";
+    $stmt_systems = $db->prepare($query_systems);
+    $stmt_systems->bindParam(':student_id', $student['id']);
+    $stmt_systems->execute();
+    $student_systems = $stmt_systems->fetchAll(PDO::FETCH_ASSOC);
     
-    $student = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // ดึงข้อมูลประวัติการแก้ไข
+    // ดึงข้อมูลประวัติการแก้ไขเฉพาะที่เกี่ยวข้องกับ student_id นี้ และ action ที่ชัดเจน
+    // หรืออาจจะดึงเฉพาะ log ที่มีการเปลี่ยนแปลง old_data, new_data ที่เป็น JSON ของข้อมูลนักศึกษา
     $log_query = "SELECT al.*, a.name as admin_name 
                 FROM admin_logs al 
                 LEFT JOIN admins a ON al.admin_id = a.id 
-                WHERE al.action LIKE :action 
+                WHERE (al.action LIKE :student_action OR al.action LIKE :system_action)
                 ORDER BY al.created_at DESC 
                 LIMIT 10";
     $log_stmt = $db->prepare($log_query);
-    $log_action = "%{$student['student_id']}%";
-    $log_stmt->bindParam(':action', $log_action);
+    $student_action_pattern = "%" . $student['student_id'] . "%"; // สำหรับ action ที่ระบุ student_id
+    $system_action_pattern = "แก้ไขข้อมูลการเข้าระบบ: " . $student['student_id']; // สำหรับ action แก้ไขระบบ
+
+    $log_stmt->bindParam(':student_action', $student_action_pattern);
+    $log_stmt->bindParam(':system_action', $system_action_pattern);
     $log_stmt->execute();
     $logs = $log_stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -55,12 +62,26 @@ try {
     header("Location: index.php?page=admin_users");
     exit;
 }
+
+function getActionIconForView($action) { // สร้างฟังก์ชันใหม่หรือใช้ร่วมกับของ logs.php
+    if (strpos(strtolower($action), 'เพิ่ม') !== false || strpos(strtolower($action), 'import') !== false) {
+        return "<i class='fas fa-plus-circle text-success'></i>";
+    } elseif (strpos(strtolower($action), 'แก้ไข') !== false) {
+        return "<i class='fas fa-edit text-warning'></i>";
+    } elseif (strpos(strtolower($action), 'รีเซ็ต') !== false) {
+        return "<i class='fas fa-key text-danger'></i>";
+    } elseif (strpos(strtolower($action), 'ยกเลิก') !== false) {
+        return "<i class='fas fa-unlink text-secondary'></i>";
+    } else {
+        return "<i class='fas fa-history text-primary'></i>";
+    }
+}
 ?>
 
 <div class="row mb-4">
     <div class="col-md-6">
         <h2>ข้อมูลนักศึกษา</h2>
-        <p>รหัสนักศึกษา: <?php echo $student['student_id']; ?></p>
+        <p>รหัสนักศึกษา: <strong><?php echo htmlspecialchars($student['student_id']); ?></strong></p>
     </div>
     <div class="col-md-6 text-end">
         <a href="?page=admin_edit_user&id=<?php echo $_GET['id']; ?>" class="btn btn-warning"><i class="fas fa-edit"></i> แก้ไขข้อมูล</a>
@@ -69,7 +90,6 @@ try {
 </div>
 
 <div class="row">
-    <!-- ข้อมูลนักศึกษา -->
     <div class="col-md-8">
         <div class="card shadow mb-4">
             <div class="card-header bg-primary text-white">
@@ -83,27 +103,27 @@ try {
                         <table class="table table-hover">
                             <tr>
                                 <th style="width: 40%">รหัสนักศึกษา:</th>
-                                <td><?php echo $student['student_id']; ?></td>
+                                <td><?php echo htmlspecialchars($student['student_id']); ?></td>
                             </tr>
                             <tr>
                                 <th>ชื่อ-นามสกุล:</th>
-                                <td><?php echo $student['firstname'] . ' ' . $student['lastname']; ?></td>
+                                <td><?php echo htmlspecialchars($student['firstname'] . ' ' . $student['lastname']); ?></td>
                             </tr>
                             <tr>
                                 <th>อีเมล:</th>
-                                <td><?php echo $student['email']; ?></td>
+                                <td><?php echo htmlspecialchars($student['email']); ?></td>
                             </tr>
                             <tr>
                                 <th>เบอร์โทรศัพท์:</th>
-                                <td><?php echo !empty($student['phone']) ? $student['phone'] : '<em class="text-muted">ไม่ระบุ</em>'; ?></td>
+                                <td><?php echo !empty($student['phone']) ? htmlspecialchars($student['phone']) : '<em class="text-muted">ไม่ระบุ</em>'; ?></td>
                             </tr>
                             <tr>
                                 <th>คณะ:</th>
-                                <td><?php echo $student['faculty']; ?></td>
+                                <td><?php echo htmlspecialchars($student['faculty']); ?></td>
                             </tr>
                             <tr>
                                 <th>สาขา:</th>
-                                <td><?php echo !empty($student['department']) ? $student['department'] : '<em class="text-muted">ไม่ระบุ</em>'; ?></td>
+                                <td><?php echo !empty($student['department']) ? htmlspecialchars($student['department']) : '<em class="text-muted">ไม่ระบุ</em>'; ?></td>
                             </tr>
                         </table>
                     </div>
@@ -113,7 +133,7 @@ try {
                         <hr>
                         <table class="table table-hover">
                             <tr>
-                                <th style="width: 40%">สถานะการเชื่อมต่อ Google:</th>
+                                <th style="width: 40%">สถานะ Google:</th>
                                 <td>
                                     <?php if(!empty($student['google_id'])): ?>
                                         <span class="badge bg-success"><i class="fab fa-google"></i> เชื่อมต่อแล้ว</span>
@@ -123,7 +143,7 @@ try {
                                 </td>
                             </tr>
                             <tr>
-                                <th>สถานะการล็อกอิน:</th>
+                                <th>สถานะล็อกอิน:</th>
                                 <td>
                                     <?php if($student['first_login'] == 1): ?>
                                         <span class="badge bg-warning text-dark">ยังไม่เคยล็อกอิน</span>
@@ -132,111 +152,185 @@ try {
                                     <?php endif; ?>
                                 </td>
                             </tr>
-                            <tr>
-                                <th>วันที่สร้าง:</th>
-                                <td><?php echo date('d/m/Y H:i:s', strtotime($student['created_at'])); ?></td>
-                            </tr>
-                            <tr>
-                                <th>อัพเดตล่าสุด:</th>
-                                <td>
-                                    <?php if(!empty($student['updated_at'])): ?>
-                                        <?php echo date('d/m/Y H:i:s', strtotime($student['updated_at'])); ?>
-                                    <?php else: ?>
-                                        <em class="text-muted">ยังไม่มีการอัพเดต</em>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
+                            <tr><th>วันที่สร้าง:</th><td><?php echo date('d/m/Y H:i', strtotime($student['created_at'])); ?></td></tr>
+                            <tr><th>อัพเดตล่าสุด:</th><td><?php echo !empty($student['updated_at']) ? date('d/m/Y H:i', strtotime($student['updated_at'])) : '<em class="text-muted">ยังไม่มี</em>'; ?></td></tr>
                         </table>
                     </div>
                 </div>
                 
                 <div class="mb-4">
-                    <h6>ที่อยู่</h6>
-                    <hr>
-                    <?php if(!empty($student['address'])): ?>
-                        <p><?php echo nl2br($student['address']); ?></p>
-                    <?php else: ?>
-                        <p class="text-muted"><em>ไม่ระบุที่อยู่</em></p>
-                    <?php endif; ?>
+                    <h6>ที่อยู่</h6> <hr>
+                    <p><?php echo !empty($student['address']) ? nl2br(htmlspecialchars($student['address'])) : '<em class="text-muted">ไม่ระบุที่อยู่</em>'; ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0"><i class="fas fa-key me-2"></i>ข้อมูลการเข้าใช้งานระบบต่างๆ</h5>
+            </div>
+            <div class="card-body">
+                <?php if (!empty($student_systems)): ?>
+                    <div class="row">
+                        <?php foreach ($student_systems as $system): ?>
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header"><strong><?php echo htmlspecialchars($system['system_name']); ?></strong></div>
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item"><strong>Username:</strong> <?php echo htmlspecialchars($system['username']); ?></li>
+                                        <li class="list-group-item"><strong>Password:</strong> <?php echo htmlspecialchars($system['initial_password']); ?></li>
+                                        <li class="list-group-item"><strong>URL ระบบ:</strong> <?php echo !empty($system['system_url']) ? '<a href="'.htmlspecialchars($system['system_url']).'" target="_blank">'.htmlspecialchars($system['system_url']).'</a>' : '<em class="text-muted">N/A</em>'; ?></li>
+                                        <li class="list-group-item"><strong>URL คู่มือ:</strong> <?php echo !empty($system['manual_url']) ? '<a href="'.htmlspecialchars($system['manual_url']).'" target="_blank">'.htmlspecialchars($system['manual_url']).'</a>' : '<em class="text-muted">N/A</em>'; ?></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="alert alert-info">ไม่พบข้อมูลการเข้าใช้งานระบบของนักศึกษาคนนี้</div>
+                <?php endif; ?>
+                 <div class="mt-3 text-center">
+                    <a href="?page=admin_edit_user&id=<?php echo $_GET['id']; ?>#systems" class="btn btn-outline-primary"><i class="fas fa-edit me-2"></i>แก้ไขข้อมูลระบบ</a>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- ประวัติการแก้ไข -->
     <div class="col-md-4">
         <div class="card shadow">
             <div class="card-header bg-info text-white">
-                <h5 class="card-title mb-0">ประวัติการแก้ไข</h5>
+                <h5 class="card-title mb-0"><i class="fas fa-history"></i> ประวัติการแก้ไขล่าสุด</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 <?php if(count($logs) > 0): ?>
-                    <ul class="list-group">
-                        <?php foreach($logs as $log): ?>
+                    <ul class="list-group list-group-flush" style="max-height: 80vh; overflow-y: auto;">
+                        <?php foreach($logs as $log_item): ?>
                             <li class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <p class="mb-0"><?php echo $log['action']; ?></p>
-                                        <small class="text-muted">โดย: <?php echo $log['admin_name']; ?></small>
-                                    </div>
-                                    <small class="text-muted"><?php echo date('d/m/Y H:i', strtotime($log['created_at'])); ?></small>
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1 small"><?php echo getActionIconForView($log_item['action']); ?> <?php echo htmlspecialchars($log_item['action']); ?></h6>
+                                    <small class="text-muted"><?php echo date('d/m/y H:i', strtotime($log_item['created_at'])); ?></small>
                                 </div>
+                                <p class="mb-1 small text-muted">โดย: <?php echo htmlspecialchars($log_item['admin_name']); ?></p>
                                 
-                                <?php if(!empty($log['old_data']) && !empty($log['new_data'])): ?>
-                                    <?php 
-                                    $old_data = json_decode($log['old_data'], true);
-                                    $new_data = json_decode($log['new_data'], true);
-                                    $changes = [];
-                                    
-                                    foreach($new_data as $key => $value) {
-                                        if(isset($old_data[$key]) && $old_data[$key] != $value) {
-                                            $changes[] = [
-                                                'field' => $key,
-                                                'old' => $old_data[$key],
-                                                'new' => $value
-                                            ];
-                                        }
-                                    }
-                                    
-                                    if(count($changes) > 0):
-                                    ?>
-                                        <div class="mt-2">
-                                            <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#changes-<?php echo $log['id']; ?>">
-                                                แสดงการเปลี่ยนแปลง
-                                            </button>
-                                            
-                                            <div class="collapse mt-2" id="changes-<?php echo $log['id']; ?>">
-                                                <div class="card card-body">
-                                                    <table class="table table-sm">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>ฟิลด์</th>
-                                                                <th>ค่าเดิม</th>
-                                                                <th>ค่าใหม่</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            <?php foreach($changes as $change): ?>
-                                                                <tr>
-                                                                    <td><?php echo $change['field']; ?></td>
-                                                                    <td><?php echo !empty($change['old']) ? $change['old'] : '<em>ไม่ระบุ</em>'; ?></td>
-                                                                    <td><?php echo !empty($change['new']) ? $change['new'] : '<em>ไม่ระบุ</em>'; ?></td>
-                                                                </tr>
-                                                            <?php endforeach; ?>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                <?php if(!empty($log_item['old_data']) || !empty($log_item['new_data'])): ?>
+                                    <button class="btn btn-xs btn-outline-info mt-1" type="button" data-bs-toggle="collapse" data-bs-target="#logCollapse<?php echo $log_item['id']; ?>" aria-expanded="false" aria-controls="logCollapse<?php echo $log_item['id']; ?>">
+                                        <i class="fas fa-eye"></i> ดูรายละเอียด
+                                    </button>
+                                    <div class="collapse mt-2" id="logCollapse<?php echo $log_item['id']; ?>">
+                                        <div class="card card-body p-2 small bg-light">
+                                            <div id="log-changes-<?php echo $log_item['id']; ?>"></div>
+                                            <script>
+                                                document.addEventListener('DOMContentLoaded', function() {
+                                                    const oldDataStr_<?php echo $log_item['id']; ?> = <?php echo json_encode($log_item['old_data'] ?? null); ?>;
+                                                    const newDataStr_<?php echo $log_item['id']; ?> = <?php echo json_encode($log_item['new_data'] ?? null); ?>;
+                                                    let oldD_<?php echo $log_item['id']; ?> = null;
+                                                    let newD_<?php echo $log_item['id']; ?> = null;
+
+                                                    try { oldD_<?php echo $log_item['id']; ?> = oldDataStr_<?php echo $log_item['id']; ?> ? JSON.parse(oldDataStr_<?php echo $log_item['id']; ?>) : null; } catch(e) { console.warn("Error parsing oldData for log <?php echo $log_item['id']; ?>");}
+                                                    try { newD_<?php echo $log_item['id']; ?> = newDataStr_<?php echo $log_item['id']; ?> ? JSON.parse(newDataStr_<?php echo $log_item['id']; ?>) : null; } catch(e) { console.warn("Error parsing newData for log <?php echo $log_item['id']; ?>");}
+                                                    
+                                                    const changesHtml_<?php echo $log_item['id']; ?> = generateDetailedChangesTableForView(oldD_<?php echo $log_item['id']; ?>, newD_<?php echo $log_item['id']; ?>);
+                                                    const container_<?php echo $log_item['id']; ?> = document.getElementById('log-changes-<?php echo $log_item['id']; ?>');
+                                                    if (changesHtml_<?php echo $log_item['id']; ?>) {
+                                                        container_<?php echo $log_item['id']; ?>.innerHTML = changesHtml_<?php echo $log_item['id']; ?>;
+                                                    } else {
+                                                        container_<?php echo $log_item['id']; ?>.innerHTML = '<p class="text-muted mb-0">ไม่มีรายละเอียดการเปลี่ยนแปลงฟิลด์</p>';
+                                                    }
+                                                });
+                                            </script>
                                         </div>
-                                    <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>
+                     <div class="p-2 text-center">
+                        <a href="?page=admin_logs&search=<?php echo urlencode($student['student_id']); ?>" class="btn btn-sm btn-outline-primary">ดูประวัติทั้งหมด</a>
+                    </div>
                 <?php else: ?>
-                    <p class="text-muted text-center">ไม่พบประวัติการแก้ไข</p>
+                    <p class="text-muted text-center p-3">ไม่พบประวัติการแก้ไขสำหรับนักศึกษาคนนี้</p>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// ฟังก์ชันนี้ควรจะเหมือนกับใน admin_logs.php หรือเป็นฟังก์ชันที่ใช้ร่วมกัน
+function generateDetailedChangesTableForView(oldData, newData) {
+    let html = '<table class="table table-sm table-bordered table-striped mb-0" style="font-size: 0.8rem;">'; // Smaller font
+    html += '<thead class="table-light"><tr><th>รายการ/ฟิลด์</th><th>ค่าเดิม</th><th>ค่าใหม่</th></tr></thead><tbody>';
+    let hasChanges = false;
+    
+    const allKeys = new Set([...(oldData ? Object.keys(oldData) : []), ...(newData ? Object.keys(newData) : [])]);
+
+    allKeys.forEach(key => {
+        const oldValue = oldData ? oldData[key] : undefined;
+        const newValue = newData ? newData[key] : undefined;
+
+        if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+            hasChanges = true;
+            if (typeof newValue === 'object' && newValue !== null && typeof oldValue === 'object' && oldValue !== null && !Array.isArray(newValue) && !Array.isArray(oldValue)) { // Check if not array
+                html += `<tr><td colspan="3" class="bg-secondary text-white p-1"><strong>${escapeHtmlForView(key)}</strong></td></tr>`; // System Name as header
+                const subKeys = new Set([...Object.keys(oldValue), ...Object.keys(newValue)]);
+                subKeys.forEach(subKey => {
+                    const oldSubValue = oldValue[subKey];
+                    const newSubValue = newValue[subKey];
+                    if (JSON.stringify(oldSubValue) !== JSON.stringify(newSubValue)) {
+                         html += `<tr>`;
+                         html += `<td class="ps-2">&nbsp;&nbsp;${escapeHtmlForView(subKey)}</td>`; // Indent subkey
+                         html += `<td>${formatValueForDisplayForView(oldSubValue)}</td>`;
+                         html += `<td>${formatValueForDisplayForView(newSubValue)}</td>`;
+                         html += `</tr>`;
+                    }
+                });
+            } else if (typeof newValue === 'object' && newValue !== null && (oldValue === undefined || oldValue === null) && !Array.isArray(newValue)) { // Added new system object
+                html += `<tr><td colspan="3" class="bg-success-light text-dark p-1"><strong>${escapeHtmlForView(key)} (เพิ่มใหม่)</strong></td></tr>`;
+                Object.keys(newValue).forEach(subKey => {
+                     html += `<tr>`;
+                     html += `<td class="ps-2">&nbsp;&nbsp;${escapeHtmlForView(subKey)}</td>`;
+                     html += `<td><em>ไม่มี</em></td>`;
+                     html += `<td>${formatValueForDisplayForView(newValue[subKey])}</td>`;
+                     html += `</tr>`;
+                });
+            } else { // Simple field change or non-object system change
+                html += `<tr>`;
+                html += `<td><strong>${escapeHtmlForView(key)}</strong></td>`;
+                html += `<td>${formatValueForDisplayForView(oldValue)}</td>`;
+                html += `<td>${formatValueForDisplayForView(newValue)}</td>`;
+                html += `</tr>`;
+            }
+        }
+    });
+
+    html += '</tbody></table>';
+    return hasChanges ? html : '';
+}
+
+function formatValueForDisplayForView(value) {
+    if (value === undefined || value === null) {
+        return '<em class="text-muted">ไม่มี</em>';
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) { // Ensure it's not an array before stringifying as object detail
+        return '<pre class="mb-0 small p-1 bg-white border rounded">' + escapeHtmlForView(JSON.stringify(value, null, 2)) + '</pre>';
+    }
+    if (String(value).length > 50) { // Truncate long strings for better display in this compact view
+         return '<span title="' + escapeHtmlForView(String(value)) + '">' + escapeHtmlForView(String(value).substring(0, 47)) + '...</span>';
+    }
+    return escapeHtmlForView(String(value));
+}
+
+function escapeHtmlForView(unsafe) {
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+</script>
+<style>
+    .btn-xs { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
+    .bg-success-light { background-color: #e6ffed !important; }
+</style>
