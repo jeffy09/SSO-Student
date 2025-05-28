@@ -70,6 +70,9 @@ if (!defined('SECURE_ACCESS')) {
                             <a class="nav-link" href="?page=student_profile">โปรไฟล์</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="?page=helpdesk">Helpdesk</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="?page=google_drive_files">Drive</a>
                         </li>
                         <li class="nav-item dropdown">
@@ -98,6 +101,9 @@ if (!defined('SECURE_ACCESS')) {
                                 <li><a class="dropdown-item" href="?page=admin_add_user"><i class="fas fa-user-plus me-2"></i>เพิ่มรายบุคคล</a></li>
                                 <li><a class="dropdown-item" href="?page=admin_bulk_add"><i class="fas fa-file-upload me-2"></i>เพิ่มแบบกลุ่ม</a></li>
                             </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="?page=admin_helpdesk">Helpdesk</a>
                         </li>
 
                         <li class="nav-item dropdown">
