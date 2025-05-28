@@ -179,6 +179,30 @@ switch ($page) {
             exit;
         }
         break;
+    case 'helpdesk':
+        if (isset($_SESSION['student_id'])) {
+            include_once 'student/helpdesk.php';
+        } else {
+            header("Location: {$base_url}?page=student_login");
+            exit;
+        }
+        break;
+    case 'helpdesk_create':
+        if (isset($_SESSION['student_id'])) {
+            include_once 'student/helpdesk_create.php';
+        } else {
+            header("Location: {$base_url}?page=student_login");
+            exit;
+        }
+        break;
+    case 'helpdesk_view':
+        if (isset($_SESSION['student_id'])) {
+            include_once 'student/helpdesk_view.php';
+        } else {
+            header("Location: {$base_url}?page=student_login");
+            exit;
+        }
+        break;
 
     // ส่วนของผู้ดูแลระบบ
     case 'admin_dashboard':
@@ -238,14 +262,14 @@ switch ($page) {
         }
         break;
     case 'admin_unlink_google': // หน้านี้ควรเป็น action ไม่ใช่ page ที่แสดงผล HTML โดยตรง
-                                // แนะนำให้เปลี่ยนเป็น POST request ไปยัง admin_profile แล้วจัดการ logic ที่นั่น
+        // แนะนำให้เปลี่ยนเป็น POST request ไปยัง admin_profile แล้วจัดการ logic ที่นั่น
         if (isset($_SESSION['admin_id'])) {
-             if (file_exists('admin/unlink_google.php')) { // ตรวจสอบชื่อไฟล์ให้ถูกต้อง
+            if (file_exists('admin/unlink_google.php')) { // ตรวจสอบชื่อไฟล์ให้ถูกต้อง
                 include_once 'admin/unlink_google.php';
             } else if (file_exists('admin/unlink.google.php')) { // ชื่อไฟล์เดิมที่คุณให้มา
                 include_once 'admin/unlink.google.php'; //
             } else {
-                 include_once 'pages/404.php'; //
+                include_once 'pages/404.php'; //
             }
         } else {
             header("Location: {$base_url}?page=admin_login");
@@ -255,6 +279,22 @@ switch ($page) {
     case 'admin_logs':
         if (isset($_SESSION['admin_id'])) {
             include_once 'admin/logs.php'; //
+        } else {
+            header("Location: {$base_url}?page=admin_login");
+            exit;
+        }
+        break;
+    case 'admin_helpdesk':
+        if (isset($_SESSION['admin_id'])) {
+            include_once 'admin/helpdesk.php';
+        } else {
+            header("Location: {$base_url}?page=admin_login");
+            exit;
+        }
+        break;
+    case 'admin_helpdesk_view':
+        if (isset($_SESSION['admin_id'])) {
+            include_once 'admin/helpdesk_view.php';
         } else {
             header("Location: {$base_url}?page=admin_login");
             exit;
@@ -271,7 +311,7 @@ switch ($page) {
     case 'debug': // ควรเข้าถึงผ่าน path ที่ถูกต้อง
         include_once 'auth/debug.php'; //
         break;
-    
+
     // หน้า migrate passwords (ควรเข้าถึงผ่าน path ที่ถูกต้อง และรันครั้งเดียว)
     case 'migrate_passwords_auth': // เปลี่ยนชื่อ page route ไม่ให้ชนกับไฟล์ config
         if (file_exists('auth/migrate_passwords.php')) { //
@@ -294,4 +334,3 @@ switch ($page) {
 include_once 'includes/footer.php'; //
 
 ob_end_flush(); // ส่ง Output Buffer ทั้งหมดไปยัง Browser
-?>
