@@ -4,6 +4,15 @@ if (!defined('SECURE_ACCESS')) {
     die('Direct access not permitted');
 }
 $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
+
+// สร้างตัวแปรสำหรับ data attribute เพื่อบอกสถานะการล็อกอินให้ JavaScript
+$user_session_attributes = "";
+if (isset($_SESSION['student_id'])) {
+    $user_session_attributes = 'data-user-id="' . htmlspecialchars($_SESSION['student_id']) . '"';
+} elseif (isset($_SESSION['admin_id'])) {
+    $user_session_attributes = 'data-admin-id="' . htmlspecialchars($_SESSION['admin_id']) . '"';
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -14,22 +23,17 @@ $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
     <title>ระบบจัดการนักศึกษา</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.19/dist/sweetalert2.min.css">
-
     <link rel="stylesheet" href="assets/css/style.css">
-
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body class="bg-light">
-    <div class="page-wrapper" id="main-wrapper" data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
+    <div class="page-wrapper" id="main-wrapper" <?php echo $user_session_attributes; ?> data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
         data-sidebar-position="fixed" data-header-position="fixed">
 
         <?php // Sidebar จะแสดงเฉพาะหน้าที่ล็อกอินแล้ว และไม่ใช่หน้า home (login)
@@ -148,7 +152,7 @@ $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
                                     </a>
                                     <div class="dropdown-menu dropdown-menu-end dropdown-menu-animate-up" aria-labelledby="drop2">
                                         <div class="message-body">
-                                            <h6 class="dropdown-header text-muted"><?php echo $_SESSION['student_name']; ?></h6>
+                                            <h6 class="dropdown-header text-muted"><?php echo htmlspecialchars($_SESSION['student_name']); ?></h6>
                                             <a href="?page=student_profile" class="dropdown-item">
                                                 <i class="fas fa-user-edit me-2"></i> แก้ไขโปรไฟล์
                                             </a>
@@ -164,7 +168,7 @@ $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
                                     </a>
                                     <div class="dropdown-menu dropdown-menu-end dropdown-menu-animate-up" aria-labelledby="drop2">
                                         <div class="message-body">
-                                            <h6 class="dropdown-header text-muted"><?php echo $_SESSION['admin_name']; ?></h6>
+                                            <h6 class="dropdown-header text-muted"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></h6>
                                             <a href="?page=admin_profile" class="dropdown-item">
                                                 <i class="fas fa-user-shield me-2"></i> โปรไฟล์
                                             </a>
@@ -178,22 +182,23 @@ $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
                 </nav>
             </header>
             <div class="container-fluid <?php echo ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') ? '' : 'is-login-page'; ?>">
-                <?php if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : // แสดงเฉพาะเมื่อมี sidebar
-                    if (isset($_SESSION['success_message'])): ?>
-                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <?php echo $_SESSION['success_message']; ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                        <?php unset($_SESSION['success_message']); ?>
-                    <?php endif; ?>
+                <?php // โค้ดแสดง Alert messages (สามารถคงเดิมได้)
+                    if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : 
+                        if (isset($_SESSION['success_message'])): ?>
+                            <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <?php echo $_SESSION['success_message']; ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                            <?php unset($_SESSION['success_message']); ?>
+                        <?php endif; ?>
 
-                    <?php if (isset($_SESSION['error_message'])): ?>
-                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <?php echo $_SESSION['error_message']; ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                        <?php unset($_SESSION['error_message']); ?>
+                        <?php if (isset($_SESSION['error_message'])): ?>
+                            <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <?php echo $_SESSION['error_message']; ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                            <?php unset($_SESSION['error_message']); ?>
+                        <?php endif; ?>
                     <?php endif; ?>
-                <?php endif; ?>
