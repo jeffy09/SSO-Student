@@ -4,6 +4,7 @@ if (!defined('SECURE_ACCESS')) {
     die('Direct access not permitted');
 }
 $current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
+$is_login_page = ($current_page_for_sidebar === 'home' || $current_page_for_sidebar === 'student_login' || $current_page_for_sidebar === 'admin_login');
 
 // สร้างตัวแปรสำหรับ data attribute เพื่อบอกสถานะการล็อกอินให้ JavaScript
 $user_session_attributes = "";
@@ -32,12 +33,12 @@ if (isset($_SESSION['student_id'])) {
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
-<body class="bg-light">
+<body class="bg-light <?php echo $is_login_page ? 'login-page-active' : ''; ?>">
     <div class="page-wrapper" id="main-wrapper" <?php echo $user_session_attributes; ?> data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
         data-sidebar-position="fixed" data-header-position="fixed">
 
-        <?php // Sidebar จะแสดงเฉพาะหน้าที่ล็อกอินแล้ว และไม่ใช่หน้า home (login)
-        if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : ?>
+        <?php // Sidebar จะแสดงเฉพาะหน้าที่ล็อกอินแล้ว และไม่ใช่หน้า login
+        if (!$is_login_page && (isset($_SESSION['student_id']) || isset($_SESSION['admin_id']))) : ?>
             <aside class="left-sidebar">
                 <div>
                     <div class="brand-logo d-flex align-items-center justify-content-between">
@@ -131,10 +132,12 @@ if (isset($_SESSION['student_id'])) {
         <?php endif; ?>
 
         <div class="body-wrapper">
+            <?php // Navbar จะไม่แสดงในหน้า login
+            if (!$is_login_page): ?>
             <header class="app-header">
                 <nav class="navbar navbar-expand-lg navbar-light">
                     <ul class="navbar-nav">
-                        <?php if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : ?>
+                        <?php if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id']))) : // Hamburger icon shows if logged in and not login page ?>
                             <li class="nav-item d-block d-xl-none">
                                 <a class="nav-link sidebartoggler nav-icon-hover" id="headerCollapse" href="javascript:void(0)">
                                     <i class="fas fa-bars fs-4"></i>
@@ -181,9 +184,11 @@ if (isset($_SESSION['student_id'])) {
                     </div>
                 </nav>
             </header>
-            <div class="container-fluid <?php echo ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') ? '' : 'is-login-page'; ?>">
-                <?php // โค้ดแสดง Alert messages (สามารถคงเดิมได้)
-                    if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : 
+            <?php endif; // end if for !is_login_page ?>
+
+            <div class="container-fluid <?php echo $is_login_page ? 'is-login-page' : ''; ?>">
+                <?php // โค้ดแสดง Alert messages
+                    if (!$is_login_page && (isset($_SESSION['student_id']) || isset($_SESSION['admin_id']))) :
                         if (isset($_SESSION['success_message'])): ?>
                             <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
                                 <i class="fas fa-check-circle me-2"></i>
