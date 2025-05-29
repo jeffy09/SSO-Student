@@ -3,6 +3,7 @@
 if (!defined('SECURE_ACCESS')) {
     die('Direct access not permitted');
 }
+$current_page_for_sidebar = isset($_GET['page']) ? $_GET['page'] : 'home';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -12,152 +13,187 @@ if (!defined('SECURE_ACCESS')) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการนักศึกษา</title>
 
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
-    <!-- SweetAlert2 CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.19/dist/sweetalert2.min.css">
 
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/css/style.css">
 
-    <!-- Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
-<body>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <?php
-            // กำหนดลิงก์ของ navbar brand ตามสถานะการล็อกอิน
-            if (isset($_SESSION['student_id'])) {
-                $brand_link = "?page=student_dashboard";
-            } elseif (isset($_SESSION['admin_id'])) {
-                $brand_link = "?page=admin_dashboard";
-            } else {
-                $brand_link = "index.php";
-            }
-            ?>
-            <a class="navbar-brand" href="<?php echo $brand_link; ?>">ระบบจัดการนักศึกษา</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <?php
-                    // กำหนดลิงก์หน้าหลักตามสถานะการล็อกอิน
-                    if (isset($_SESSION['student_id'])) {
-                        $home_link = "?page=student_dashboard";
-                        $home_text = "แดชบอร์ด";
-                    } elseif (isset($_SESSION['admin_id'])) {
-                        $home_link = "?page=admin_dashboard";
-                        $home_text = "แดชบอร์ด";
-                    } else {
-                        $home_link = "index.php";
-                        $home_text = "หน้าหลัก";
-                    }
-                    ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?php echo $home_link; ?>"><?php echo $home_text; ?></a>
-                    </li>
+<body class="bg-light">
+    <div class="page-wrapper" id="main-wrapper" data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
+        data-sidebar-position="fixed" data-header-position="fixed">
 
-                    <?php if (isset($_SESSION['student_id'])): ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="?page=student_profile">โปรไฟล์</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="?page=helpdesk">Helpdesk</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="?page=google_drive_files">Drive</a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="studentDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user"></i> <?php echo $_SESSION['student_name']; ?>
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="?page=student_dashboard"><i class="fas fa-tachometer-alt me-2"></i>แดชบอร์ด</a></li>
-                                <li><a class="dropdown-item" href="?page=student_profile"><i class="fas fa-user-edit me-2"></i>โปรไฟล์</a></li>
-                                <li>
-                                    <hr class="dropdown-divider">
+        <?php // Sidebar จะแสดงเฉพาะหน้าที่ล็อกอินแล้ว และไม่ใช่หน้า home (login)
+        if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : ?>
+            <aside class="left-sidebar">
+                <div>
+                    <div class="brand-logo d-flex align-items-center justify-content-between">
+                        <a href="<?php echo (isset($_SESSION['student_id'])) ? '?page=student_dashboard' : '?page=admin_dashboard'; ?>" class="text-nowrap logo-img">
+                            <h4 class="text-primary fw-bold ps-2 pt-2">ระบบนักศึกษา</h4>
+                        </a>
+                        <div class="close-btn d-xl-none d-block sidebartoggler cursor-pointer" id="sidebarCollapse">
+                            <i class="fas fa-times fs-4"></i>
+                        </div>
+                    </div>
+                    <nav class="sidebar-nav scroll-sidebar" data-simplebar="">
+                        <ul id="sidebarnav">
+                            <li class="nav-small-cap">
+                                <i class="fas fa-ellipsis-h nav-small-cap-icon fs-4"></i>
+                                <span class="hide-menu">เมนูหลัก</span>
+                            </li>
+                            <?php if (isset($_SESSION['student_id'])): ?>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'student_dashboard') ? 'active' : ''; ?>" href="?page=student_dashboard" aria-expanded="false">
+                                        <span><i class="fas fa-tachometer-alt"></i></span>
+                                        <span class="hide-menu">แดชบอร์ด</span>
+                                    </a>
                                 </li>
-                                <li><a class="dropdown-item" href="?page=logout"><i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ</a></li>
-                            </ul>
-                        </li>
-
-                    <?php elseif (isset($_SESSION['admin_id'])): ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="?page=admin_users">จัดการผู้ใช้งาน</a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="addUserDropdown" role="button" data-bs-toggle="dropdown">
-                                เพิ่มผู้ใช้งาน
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="?page=admin_add_user"><i class="fas fa-user-plus me-2"></i>เพิ่มรายบุคคล</a></li>
-                                <li><a class="dropdown-item" href="?page=admin_bulk_add"><i class="fas fa-file-upload me-2"></i>เพิ่มแบบกลุ่ม</a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="?page=admin_helpdesk">Helpdesk</a>
-                        </li>
-
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user-shield"></i> <?php echo $_SESSION['admin_name']; ?>
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="?page=admin_dashboard"><i class="fas fa-tachometer-alt me-2"></i>แดชบอร์ด</a></li>
-                                <li><a class="dropdown-item" href="?page=admin_profile"><i class="fas fa-user-edit me-2"></i>โปรไฟล์</a></li>
-                                <!-- เพิ่มรายการเมนูใหม่ตรงนี้ -->
-                                <li><a class="dropdown-item" href="?page=admin_logs"><i class="fas fa-history me-2"></i>ประวัติการทำงาน</a></li>
-                                <li>
-                                    <hr class="dropdown-divider">
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'student_profile') ? 'active' : ''; ?>" href="?page=student_profile" aria-expanded="false">
+                                        <span><i class="fas fa-user"></i></span>
+                                        <span class="hide-menu">โปรไฟล์</span>
+                                    </a>
                                 </li>
-                                <li><a class="dropdown-item" href="?page=logout"><i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ</a></li>
-                            </ul>
-                        </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'helpdesk' || $current_page_for_sidebar === 'helpdesk_create' || $current_page_for_sidebar === 'helpdesk_view') ? 'active' : ''; ?>" href="?page=helpdesk" aria-expanded="false">
+                                        <span><i class="fas fa-life-ring"></i></span>
+                                        <span class="hide-menu">Helpdesk</span>
+                                    </a>
+                                </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'google_drive_files') ? 'active' : ''; ?>" href="?page=google_drive_files" aria-expanded="false">
+                                        <span><i class="fab fa-google-drive"></i></span>
+                                        <span class="hide-menu">Drive</span>
+                                    </a>
+                                </li>
+                            <?php elseif (isset($_SESSION['admin_id'])): ?>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_dashboard') ? 'active' : ''; ?>" href="?page=admin_dashboard" aria-expanded="false">
+                                        <span><i class="fas fa-tachometer-alt"></i></span>
+                                        <span class="hide-menu">แดชบอร์ด</span>
+                                    </a>
+                                </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_users' || $current_page_for_sidebar === 'admin_view_user' || $current_page_for_sidebar === 'admin_edit_user') ? 'active' : ''; ?>" href="?page=admin_users" aria-expanded="false">
+                                        <span><i class="fas fa-users-cog"></i></span>
+                                        <span class="hide-menu">จัดการผู้ใช้งาน</span>
+                                    </a>
+                                </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_add_user' || $current_page_for_sidebar === 'admin_bulk_add') ? 'active' : ''; ?>" href="#" data-bs-toggle="collapse" data-bs-target="#addUserSubmenu" aria-expanded="false" aria-controls="addUserSubmenu">
+                                        <span><i class="fas fa-user-plus"></i></span>
+                                        <span class="hide-menu">เพิ่มผู้ใช้งาน</span>
+                                        <i class="fas fa-chevron-down float-end"></i>
+                                    </a>
+                                    <ul id="addUserSubmenu" class="collapse list-unstyled <?php echo ($current_page_for_sidebar === 'admin_add_user' || $current_page_for_sidebar === 'admin_bulk_add') ? 'show' : ''; ?>">
+                                        <li class="sidebar-item ms-3">
+                                            <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_add_user') ? 'active' : ''; ?>" href="?page=admin_add_user">
+                                                <i class="fas fa-user me-2"></i>เพิ่มรายบุคคล
+                                            </a>
+                                        </li>
+                                        <li class="sidebar-item ms-3">
+                                            <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_bulk_add') ? 'active' : ''; ?>" href="?page=admin_bulk_add">
+                                                <i class="fas fa-file-csv me-2"></i>เพิ่มแบบกลุ่ม
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_helpdesk' || $current_page_for_sidebar === 'admin_helpdesk_view') ? 'active' : ''; ?>" href="?page=admin_helpdesk" aria-expanded="false">
+                                        <span><i class="fas fa-headset"></i></span>
+                                        <span class="hide-menu">Helpdesk</span>
+                                    </a>
+                                </li>
+                                <li class="sidebar-item">
+                                    <a class="sidebar-link <?php echo ($current_page_for_sidebar === 'admin_logs') ? 'active' : ''; ?>" href="?page=admin_logs" aria-expanded="false">
+                                        <span><i class="fas fa-clipboard-list"></i></span>
+                                        <span class="hide-menu">ประวัติการทำงาน</span>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                </div>
+            </aside>
+        <?php endif; ?>
 
-                    <?php else: ?>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                                เข้าสู่ระบบ
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="?page=student_login"><i class="fas fa-user-graduate me-2"></i>สำหรับนักศึกษา</a></li>
-                                <li><a class="dropdown-item" href="?page=admin_login"><i class="fas fa-user-shield me-2"></i>สำหรับผู้ดูแลระบบ</a></li>
-                            </ul>
-                        </li>
+        <div class="body-wrapper">
+            <header class="app-header">
+                <nav class="navbar navbar-expand-lg navbar-light">
+                    <ul class="navbar-nav">
+                        <?php if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : ?>
+                            <li class="nav-item d-block d-xl-none">
+                                <a class="nav-link sidebartoggler nav-icon-hover" id="headerCollapse" href="javascript:void(0)">
+                                    <i class="fas fa-bars fs-4"></i>
+                                </a>
+                            </li>
+                        <?php endif; ?>
+                    </ul>
+                    <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
+                        <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
+                            <?php if (isset($_SESSION['student_id'])): ?>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link nav-icon-hover" href="javascript:void(0)" id="drop2" data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                        <img src="assets/images/profile/user-1.jpg" alt="" width="35" height="35" class="rounded-circle">
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-animate-up" aria-labelledby="drop2">
+                                        <div class="message-body">
+                                            <h6 class="dropdown-header text-muted"><?php echo $_SESSION['student_name']; ?></h6>
+                                            <a href="?page=student_profile" class="dropdown-item">
+                                                <i class="fas fa-user-edit me-2"></i> แก้ไขโปรไฟล์
+                                            </a>
+                                            <a href="?page=logout" class="btn btn-outline-primary mx-3 mt-2 d-block">ออกจากระบบ</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            <?php elseif (isset($_SESSION['admin_id'])): ?>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link nav-icon-hover" href="javascript:void(0)" id="drop2" data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                        <img src="assets/images/profile/admin-avatar.png" alt="" width="35" height="35" class="rounded-circle">
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-animate-up" aria-labelledby="drop2">
+                                        <div class="message-body">
+                                            <h6 class="dropdown-header text-muted"><?php echo $_SESSION['admin_name']; ?></h6>
+                                            <a href="?page=admin_profile" class="dropdown-item">
+                                                <i class="fas fa-user-shield me-2"></i> โปรไฟล์
+                                            </a>
+                                            <a href="?page=logout" class="btn btn-outline-primary mx-3 mt-2 d-block">ออกจากระบบ</a>
+                                        </div>
+                                    </div>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                </nav>
+            </header>
+            <div class="container-fluid <?php echo ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') ? '' : 'is-login-page'; ?>">
+                <?php if ((isset($_SESSION['student_id']) || isset($_SESSION['admin_id'])) && $current_page_for_sidebar !== 'home') : // แสดงเฉพาะเมื่อมี sidebar
+                    if (isset($_SESSION['success_message'])): ?>
+                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <?php echo $_SESSION['success_message']; ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <?php unset($_SESSION['success_message']); ?>
                     <?php endif; ?>
-                </ul>
-            </div>
-        </div>
-    </nav>
 
-    <!-- แสดงข้อความแจ้งเตือนจาก Session -->
-    <?php if (isset($_SESSION['success_message'])): ?>
-        <div class="container mt-3">
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['success_message']; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        </div>
-        <?php unset($_SESSION['success_message']); ?>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['error_message'])): ?>
-        <div class="container mt-3">
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['error_message']; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        </div>
-        <?php unset($_SESSION['error_message']); ?>
-    <?php endif; ?>
-
-    <!-- Main Content -->
-    <div class="container my-4">
+                    <?php if (isset($_SESSION['error_message'])): ?>
+                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <?php echo $_SESSION['error_message']; ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <?php unset($_SESSION['error_message']); ?>
+                    <?php endif; ?>
+                <?php endif; ?>
