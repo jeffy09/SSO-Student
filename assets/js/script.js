@@ -8,10 +8,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const bsAlertInstance = bootstrap.Alert.getInstance(alert);
                     if (bsAlertInstance) {
                         bsAlertInstance.close();
-                    } else {
-                        // Fallback if instance not found (e.g. alert added dynamically without JS init)
-                        // This might not be needed if all alerts are standard Bootstrap alerts.
-                        // alert.remove();
                     }
                 }
             }, 5000);
@@ -40,37 +36,50 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarCloseBtnInside = document.getElementById('sidebarCollapse'); // Close button inside Sidebar
     const leftSidebar = document.querySelector('.left-sidebar');
     const body = document.body;
-    const mainWrapper = document.getElementById('main-wrapper');
+    const mainWrapper = document.getElementById('main-wrapper'); // Used to check if logged in (add data-attributes in header.php)
 
     function pageShouldHaveSidebar() {
         const currentPage = new URLSearchParams(window.location.search).get('page') || 'home';
-        // Check for data attributes on main-wrapper, set in header.php
         const isUserSessionActive = mainWrapper && (mainWrapper.hasAttribute('data-user-id') || mainWrapper.hasAttribute('data-admin-id'));
         return currentPage !== 'home' && isUserSessionActive;
     }
 
     function updateSidebarLayout() {
-        if (!leftSidebar) return;
+        if (!leftSidebar) return; // Do nothing if sidebar element doesn't exist
 
         if (pageShouldHaveSidebar()) {
             if (window.innerWidth >= 1200) { // Desktop view
                 body.classList.add('sidebar-enabled');
-                leftSidebar.classList.remove('show-sidebar'); // This class is for mobile
+                leftSidebar.classList.remove('show-sidebar'); // This class is primarily for mobile
             } else { // Mobile/Tablet view
                 body.classList.remove('sidebar-enabled');
-                // 'show-sidebar' will be toggled by buttons for mobile
+                // 'show-sidebar' on leftSidebar itself will be toggled by buttons for mobile
             }
+            body.classList.remove('login-page-active'); // Ensure login-page-active is removed
         } else { // Login page or no user session
             body.classList.remove('sidebar-enabled');
             leftSidebar.classList.remove('show-sidebar');
+            if (currentPage === 'home') { // Add specific class for login page styling
+                 body.classList.add('login-page-active');
+            } else {
+                 body.classList.remove('login-page-active');
+            }
         }
     }
 
     function toggleMobileSidebar() {
         if (leftSidebar && window.innerWidth < 1200 && pageShouldHaveSidebar()) {
             leftSidebar.classList.toggle('show-sidebar');
-            // Optional: Add an overlay to the body for mobile sidebar
-            // body.classList.toggle('sidebar-mobile-overlay');
+            // Example: Add an overlay to the body when mobile sidebar is open
+            // if (leftSidebar.classList.contains('show-sidebar')) {
+            //     const overlay = document.createElement('div');
+            //     overlay.className = 'sidebar-overlay';
+            //     overlay.onclick = toggleMobileSidebar; // Close sidebar on overlay click
+            //     document.body.appendChild(overlay);
+            // } else {
+            //     const overlay = document.querySelector('.sidebar-overlay');
+            //     if (overlay) overlay.remove();
+            // }
         }
     }
 
@@ -91,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSidebarLayout();
     window.addEventListener('resize', updateSidebarLayout);
 
-    // Activate sidebar link based on current page (more robust query selection)
+    // Activate sidebar link based on current page
     if (pageShouldHaveSidebar()) {
         const currentQueryString = window.location.search; // e.g., "?page=student_dashboard"
         const sidebarNav = document.querySelector('.sidebar-nav');
@@ -100,8 +109,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const sidebarLinks = sidebarNav.querySelectorAll('a.sidebar-link');
 
             sidebarLinks.forEach(link => {
-                // Exact match for href, or if href is part of a submenu structure
-                if (link.getAttribute('href') === currentQueryString) {
+                const linkHref = link.getAttribute('href');
+                // Check if the link directly matches or if it's a parent of an active submenu item
+                if (linkHref === currentQueryString) {
                     link.classList.add('active');
 
                     // Expand parent submenu if this link is inside one
@@ -109,14 +119,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (parentCollapseEl) {
                         const triggerLink = document.querySelector(`a.sidebar-link[data-bs-target="#${parentCollapseEl.id}"]`);
                         if (triggerLink) {
+                            triggerLink.classList.add('active'); // Also make the trigger link active
                             triggerLink.setAttribute('aria-expanded', 'true');
-                            triggerLink.classList.remove('collapsed'); // Ensure trigger is not marked as collapsed
-                            // triggerLink.classList.add('active'); // Optionally make the main toggle active too
+                            triggerLink.classList.remove('collapsed');
                         }
+                        // Ensure the collapse itself is shown
                         if (!parentCollapseEl.classList.contains('show')) {
-                            // Use Bootstrap's Collapse API to show
-                            const bsCollapse = bootstrap.Collapse.getInstance(parentCollapseEl) || new bootstrap.Collapse(parentCollapseEl, { toggle: false });
-                            bsCollapse.show();
+                             const bsCollapse = bootstrap.Collapse.getInstance(parentCollapseEl) || new bootstrap.Collapse(parentCollapseEl, { toggle: false });
+                             bsCollapse.show();
                         }
                     }
                 } else {
@@ -134,8 +144,8 @@ function confirmDelete(message = 'คุณแน่ใจหรือไม่�
         text: message,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: 'var(--bs-danger)', // Use CSS variable
-        cancelButtonColor: '#6c757d', // Bootstrap secondary
+        confirmButtonColor: 'var(--bs-danger)',
+        cancelButtonColor: '#6c757d',
         confirmButtonText: 'ใช่, ลบเลย!',
         cancelButtonText: 'ยกเลิก'
     }).then((result) => {
