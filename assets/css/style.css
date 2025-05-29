@@ -17,7 +17,7 @@
 
 body {
     font-family: var(--bs-body-font-family);
-    background-color: var(--bs-body-bg);
+    background-color: var(--bs-body-bg); /* Default background */
     color: var(--bs-dark);
     font-weight: 400;
     line-height: 1.5;
@@ -29,7 +29,7 @@ body {
     display: flex; /* ใช้ flex สำหรับ layout หลัก */
     flex-direction: row; /* Sidebar และ content อยู่ในแถวเดียวกัน */
     min-height: 100vh;
-    background-color: var(--bs-body-bg);
+    /* background-color ถูกกำหนดโดย body หรือ .login-background-wrapper */
     position: relative; /* สำหรับ stacking context */
 }
 
@@ -193,10 +193,10 @@ body {
 /* Main Content Area (body-wrapper) */
 .body-wrapper {
     flex-grow: 1; /* ให้ content ขยายเต็มพื้นที่ที่เหลือ */
-    padding-top: var(--navbar-height); /* เว้นที่สำหรับ Navbar ด้านบน */
+    padding-top: var(--navbar-height); /* เว้นที่สำหรับ Navbar ด้านบน (default) */
     width: 100%; /* Default เต็มความกว้าง */
     margin-left: 0; /* Default ไม่มี margin ซ้าย */
-    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out, padding-top 0s; /* Add padding-top to transitions */
     position: relative; /* Ensure it's part of the flow */
 }
 
@@ -260,38 +260,104 @@ body {
 }
 
 /* เมื่อ Sidebar แสดงผลบน Desktop (>=1200px) */
-body.sidebar-enabled .body-wrapper {
+body:not(.login-page-active).sidebar-enabled .body-wrapper {
     margin-left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width)); /* Content area width */
 }
-body.sidebar-enabled .app-header {
+body:not(.login-page-active).sidebar-enabled .app-header {
     left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width)); /* Navbar width */
 }
-body.sidebar-enabled .left-sidebar {
+body:not(.login-page-active).sidebar-enabled .left-sidebar {
     left: 0; /* แสดง Sidebar */
 }
 
 /* Container for page content */
 .container-fluid {
     padding: 25px;
-    min-height: calc(100vh - var(--navbar-height));
+    min-height: calc(100vh - var(--navbar-height)); /* Default min-height */
 }
-.container-fluid.is-login-page {
+
+/* --- Login Page Specific Styles --- */
+.login-page-active .body-wrapper { /* Class ที่เพิ่มให้ body ในหน้า login */
+    padding-top: 0 !important; /* ไม่มี padding ด้านบนสำหรับ navbar */
+    margin-left: 0 !important;
+    width: 100% !important;
+}
+.login-page-active .app-header { /* ซ่อน app-header ในหน้า login */
+    display: none !important;
+}
+.login-page-active .left-sidebar { /* ซ่อน sidebar ในหน้า login */
+    display: none !important;
+}
+.login-page-active .container-fluid.is-login-page {
     padding: 0;
     display: flex;
     flex-grow: 1;
     align-items: center;
     justify-content: center;
-    /* Remove body-wrapper margin for login page via JS if needed, or specific class */
+    min-height: 100vh; /* ทำให้ container เต็มความสูงของ viewport */
 }
-body.login-page-active .body-wrapper { /* Add this class to body in login page via PHP/JS */
-    margin-left: 0 !important;
-    width: 100% !important;
+
+/* Background and Form for Login Pages */
+.login-background-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100vh;
+    background-image: url('../images/login-bg.png'); /* <<--- ตรวจสอบ Path นี้ให้ถูกต้อง */
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    padding: 1rem; /* Padding รอบนอกสุด */
+    position: relative;
 }
-body.login-page-active .app-header {
-    left: 0 !important;
-    width: 100% !important;
+
+.login-background-wrapper::before { /* Overlay */
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* background-color: rgba(0, 0, 0, 0.3); สีดำโปร่งแสง */
+    z-index: 1;
+}
+
+.login-background-wrapper > .d-flex { /* Content container of login form */
+    position: relative;
+    z-index: 2; /* ให้อยู่เหนือ overlay */
+}
+
+.auth-login-form-box {
+    position: relative;
+    width: 100%;
+    max-width: 475px;
+}
+.auth-login-form-box .card {
+    padding: 25px 30px;
+    border-radius: 0.5rem;
+    box-shadow: 0px 5px 20px rgba(0, 0, 0, 0.1);
+    background-color: rgba(255, 255, 255, 0.95); /* Card พื้นหลังโปร่งแสงเล็กน้อย */
+}
+
+.login-logo-container {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.login-logo-container img {
+    max-height: 60px;
+}
+.login-logo-container h2 { /* ทำให้ H2 ใน logo container เป็นสีขาวหรือสีสว่าง */
+    color: #ffffff; /* หรือ var(--bs-light) */
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* เพิ่มเงาให้ข้อความอ่านง่ายขึ้น */
+}
+.login-card .text-primary { /* ปรับสี Primary ใน Card ถ้าต้องการให้ตัดกับพื้นหลัง */
+    /* color: var(--bs-dark) !important;  ตัวอย่าง */
+}
+.login-card label { /* ทำให้ label อ่านง่ายขึ้น */
+    color: var(--bs-dark);
 }
 
 
@@ -301,75 +367,29 @@ body.login-page-active .app-header {
     /* .show-sidebar class (added by JS) makes it visible */
 
     /* On mobile, body-wrapper and app-header are always full width */
-    .body-wrapper {
+    body:not(.login-page-active) .body-wrapper {
         margin-left: 0 !important;
         width: 100% !important;
     }
-    .app-header {
+    body:not(.login-page-active) .app-header {
         left: 0 !important;
         width: 100% !important;
     }
     /* Ensure that even if sidebar-enabled is on body, mobile still hides sidebar by default */
-    body.sidebar-enabled .left-sidebar:not(.show-sidebar) {
+    body:not(.login-page-active).sidebar-enabled .left-sidebar:not(.show-sidebar) {
          left: calc(var(--sidebar-width) * -1);
     }
 }
 
-/* --- Login Page Specific Styles --- */
-.position-relative.overflow-hidden.radial-gradient.min-vh-100 {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    background-color: var(--bs-light);
-    padding: 1rem;
-}
-.auth-login-form-box {
-    position: relative;
-    width: 100%;
-    max-width: 475px;
-}
-.auth-login-form-box .card {
-    padding: 25px 30px;
-    border-radius: 0.5rem;
-    box-shadow: 0px 5px 20px rgba(0, 0, 0, 0.05);
-}
-.login-card .card-header h4 {
-    font-weight: 700;
-    color: var(--bs-primary);
-}
-.login-logo-container {
-    text-align: center;
-    margin-bottom: 1.5rem;
-}
-.login-logo-container img {
-    max-height: 60px;
-}
-
 /* --- General Elements (Cards, Buttons, Forms, Alerts, etc.) --- */
-/* Navbar (General, if any specific styling needed beyond app-header's navbar) */
-.navbar-brand img {
-    max-height: 35px;
-}
-.navbar-nav .nav-link {
-    color: #5a6a85;
-    font-weight: 500;
-    padding: 0.5rem 1rem;
-}
-.navbar-nav .nav-link.active,
-.navbar-nav .nav-link:hover,
-.navbar-nav .nav-link:focus {
-    color: var(--bs-primary);
-}
-
-/* Cards */
-.card {
+/* Cards (ปรับเฉพาะส่วนที่ไม่ใช่ login card ถ้าต้องการ) */
+.card:not(.login-card) { /* ใช้ :not() เพื่อไม่ให้กระทบ login card */
     border: none;
     border-radius: 0.5rem;
     margin-bottom: 1.5rem;
     background-color: #fff;
 }
-.card-header {
+.card-header:not(.login-card .card-header) {
     background-color: transparent;
     border-bottom: 1px solid #e9ecef;
     padding: 1rem 1.25rem;
