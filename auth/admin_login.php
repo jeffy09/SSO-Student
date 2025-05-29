@@ -71,38 +71,47 @@ if (isset($_SESSION['auth_error'])) {
 }
 ?>
 
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">เข้าสู่ระบบสำหรับผู้ดูแลระบบ</h4>
-            </div>
-            <div class="card-body">
-                <?php if(isset($login_error)): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <?php echo $login_error; ?>
+<div class="position-relative overflow-hidden radial-gradient min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="d-flex align-items-center justify-content-center w-100">
+        <div class="row justify-content-center w-100">
+            <div class="col-md-8 col-lg-6 col-xxl-3">
+                 <div class="login-logo-container text-center mb-4">
+                    <h2 class="text-primary fw-bold">ระบบจัดการนักศึกษา</h2>
+                 </div>
+                <div class="card mb-0 login-card">
+                    <div class="card-body">
+                        <a href="<?php echo $base_url; ?>?page=home" class="text-nowrap logo-img text-center d-block py-3 w-100 mb-2">
+                            </a>
+                        <p class="text-center fw-semibold">เข้าสู่ระบบสำหรับผู้ดูแลระบบ</p>
+                        <?php if(isset($login_error)): ?>
+                            <div class="alert alert-danger text-center py-2" role="alert">
+                                <?php echo $login_error; ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <form action="?page=admin_login" method="post">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">ชื่อผู้ใช้</label>
+                                <input type="text" class="form-control fs-6" id="username" name="username" required value="<?php echo isset($username) ? htmlspecialchars($username) : ''; ?>" placeholder="กรอกชื่อผู้ใช้">
+                            </div>
+                            <div class="mb-4">
+                                <label for="password" class="form-label">รหัสผ่าน</label>
+                                <input type="password" class="form-control fs-6" id="password" name="password" required placeholder="กรอกรหัสผ่าน">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2 fs-5 mb-4 rounded-2">เข้าสู่ระบบ</button>
+                        </form>
+                        
+                        <div class="d-flex align-items-center justify-content-center">
+                             <p class="fs-4 mb-0 fw-semibold me-2">หรือ</p>
+                             <a href="?page=google_login&user_type=admin" class="btn btn-outline-danger d-flex align-items-center justify-content-center">
+                                <i class="fab fa-google fs-5 me-2"></i>
+                                <span class="fw-semibold">เข้าสู่ระบบด้วย Google</span>
+                            </a>
+                        </div>
+                         <div class="text-center mt-4">
+                            <small class="text-muted">นักศึกษา กรุณาเข้าสู่ระบบผ่าน <a href="<?php echo $base_url; ?>?page=home" class="text-primary fw-semibold">หน้าหลักสำหรับนักศึกษา</a></small>
+                        </div>
                     </div>
-                <?php endif; ?>
-                
-                <form action="?page=admin_login" method="post">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">ชื่อผู้ใช้</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="password" class="form-label">รหัสผ่าน</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">เข้าสู่ระบบ</button>
-                </form>
-                
-                <hr>
-                
-                <div class="text-center">
-                    <p>หรือเข้าสู่ระบบด้วย</p>
-                    <a href="?page=google_login&user_type=admin" class="btn btn-outline-danger">
-                        <i class="fab fa-google me-2"></i>เข้าสู่ระบบด้วย Google
-                    </a>
                 </div>
             </div>
         </div>
