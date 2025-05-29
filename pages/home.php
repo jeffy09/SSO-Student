@@ -108,23 +108,24 @@ if (isset($_SESSION['auth_error'])) {
 }
 ?>
 
-<div class="position-relative overflow-hidden radial-gradient min-vh-100 d-flex align-items-center justify-content-center">
+<div class="login-background-wrapper">
     <div class="d-flex align-items-center justify-content-center w-100">
         <div class="row justify-content-center w-100">
             <div class="col-md-8 col-lg-6 col-xxl-3">
-                 <div class="login-logo-container text-center mb-4">
+                <div class="login-logo-container text-center mb-4">
                     <h2 class="text-primary fw-bold">ระบบจัดการนักศึกษา</h2>
-                 </div>
-                <div class="card mb-0 login-card"> <div class="card-body">
+                </div>
+                <div class="card mb-0 login-card">
+                    <div class="card-body">
                         <a href="<?php echo $base_url; ?>?page=home" class="text-nowrap logo-img text-center d-block py-3 w-100 mb-2">
-                            </a>
+                        </a>
                         <p class="text-center fw-semibold">เข้าสู่ระบบสำหรับนักศึกษา</p>
                         <?php if(isset($login_error)): ?>
                             <div class="alert alert-danger text-center py-2" role="alert">
                                 <?php echo $login_error; ?>
                             </div>
                         <?php endif; ?>
-                        
+
                         <form action="?page=home" method="post">
                             <div class="mb-3">
                                 <label for="student_id" class="form-label">รหัสนักศึกษา</label>
@@ -135,16 +136,16 @@ if (isset($_SESSION['auth_error'])) {
                             </div>
                             <button type="submit" class="btn btn-primary w-100 py-2 fs-5 mb-4 rounded-2">เข้าสู่ระบบ</button>
                         </form>
-                        
+
                         <div class="d-flex align-items-center justify-content-center">
-                             <p class="fs-4 mb-0 fw-semibold me-2">หรือ</p>
-                             <a href="?page=google_login&user_type=student" class="btn btn-outline-danger d-flex align-items-center justify-content-center">
+                            <p class="fs-4 mb-0 fw-semibold me-2">หรือ</p>
+                            <a href="?page=google_login&user_type=student" class="btn btn-outline-danger d-flex align-items-center justify-content-center">
                                 <i class="fab fa-google fs-5 me-2"></i>
                                 <span class="fw-semibold">เข้าสู่ระบบด้วย Google</span>
                             </a>
                         </div>
-                         <div class="text-center mt-4">
-                            <small class="text-muted">ผู้ดูแลระบบกรุณาเข้าสู่ระบบผ่าน <a href="<?php echo $base_url; ?>/admin" class="text-primary fw-semibold">URL สำหรับผู้ดูแลระบบ</a></small>
+                        <div class="text-center mt-4">
+                            <small class="text-muted">ผู้ดูแลระบบกรุณาเข้าสู่ระบบผ่าน <a href="<?php echo $base_url; ?>?page=admin_login" class="text-primary fw-semibold">URL สำหรับผู้ดูแลระบบ</a></small>
                         </div>
                     </div>
                 </div>
