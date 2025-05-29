@@ -1,87 +1,141 @@
-// Custom JavaScript
 document.addEventListener('DOMContentLoaded', function() {
-    // เพิ่ม active class ให้กับ navbar ตาม URL ปัจจุบัน
-    const currentUrl = window.location.href;
-    const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
-    
-    navLinks.forEach(link => {
-        const href = link.getAttribute('href');
-        if (currentUrl.includes(href) && href !== 'index.php') {
-            link.classList.add('active');
-        }
-    });
-    
-    // Timeout สำหรับการแสดง Alert (เฉพาะ alert ที่ไม่ใช่ alert ถาวร)
-    // แก้ไข: ไม่ให้ alert แบบ alert-info หายไปอัตโนมัติ
-    const alerts = document.querySelectorAll('.alert:not(.alert-permanent):not(.alert-info)');
-    if (alerts.length > 0) {
-        setTimeout(() => {
-            alerts.forEach(alert => {
-                // ตรวจสอบว่า alert ยังอยู่ในหน้าเว็บหรือไม่ก่อนที่จะปิด
-                if (alert && alert.parentNode) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            });
-        }, 5000);
-    }
-    
-    // Timeout สำหรับ alert ประเภท success และ warning เท่านั้น
-    const autoCloseAlerts = document.querySelectorAll('.alert.alert-success, .alert.alert-warning, .alert.alert-danger');
+    // Timeout for Alerts (success, warning, danger) that are not permanent
+    const autoCloseAlerts = document.querySelectorAll('.alert.alert-success:not(.alert-permanent), .alert.alert-warning:not(.alert-permanent), .alert.alert-danger:not(.alert-permanent)');
     if (autoCloseAlerts.length > 0) {
         autoCloseAlerts.forEach(alert => {
-            // เฉพาะ alert ที่ไม่มี class "alert-permanent" เท่านั้นที่จะหายไปอัตโนมัติ
-            if (!alert.classList.contains('alert-permanent')) {
-                setTimeout(() => {
-                    if (alert && alert.parentNode) {
-                        const bsAlert = new bootstrap.Alert(alert);
-                        bsAlert.close();
+            setTimeout(() => {
+                if (alert && alert.parentNode) {
+                    const bsAlertInstance = bootstrap.Alert.getInstance(alert);
+                    if (bsAlertInstance) {
+                        bsAlertInstance.close();
+                    } else {
+                        // Fallback if instance not found (e.g. alert added dynamically without JS init)
+                        // This might not be needed if all alerts are standard Bootstrap alerts.
+                        // alert.remove();
                     }
-                }, 5000);
-            }
+                }
+            }, 5000);
         });
     }
-    
-    // ตรวจสอบและแสดง Error message จาก session (ถ้ามี)
-    if (typeof sessionErrorMessage !== 'undefined' && sessionErrorMessage) {
-        Swal.fire({
-            title: 'ข้อผิดพลาด!',
-            text: sessionErrorMessage,
-            icon: 'error',
-            confirmButtonText: 'ตกลง'
-        });
-    }
-    
-    // ตรวจสอบการกรอกรหัสบัตรประชาชน
+
+    // ID Card input validation
     const idCardInputs = document.querySelectorAll('input[name="id_card"], input[name="new_id_card"]');
     idCardInputs.forEach(input => {
         input.addEventListener('input', function(e) {
-            // อนุญาตเฉพาะตัวเลขเท่านั้น
             this.value = this.value.replace(/[^0-9]/g, '');
-            
-            // จำกัดความยาวไม่เกิน 13 หลัก
             if (this.value.length > 13) {
                 this.value = this.value.slice(0, 13);
             }
         });
     });
-    
-    // Bootstrap Tooltip
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+
+    // Bootstrap Tooltip Initialization
+    const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(tooltipTriggerEl => {
+        new bootstrap.Tooltip(tooltipTriggerEl);
     });
+
+    // --- Sidebar Logic ---
+    const sidebarToggler = document.getElementById('headerCollapse'); // Hamburger in Navbar
+    const sidebarCloseBtnInside = document.getElementById('sidebarCollapse'); // Close button inside Sidebar
+    const leftSidebar = document.querySelector('.left-sidebar');
+    const body = document.body;
+    const mainWrapper = document.getElementById('main-wrapper');
+
+    function pageShouldHaveSidebar() {
+        const currentPage = new URLSearchParams(window.location.search).get('page') || 'home';
+        // Check for data attributes on main-wrapper, set in header.php
+        const isUserSessionActive = mainWrapper && (mainWrapper.hasAttribute('data-user-id') || mainWrapper.hasAttribute('data-admin-id'));
+        return currentPage !== 'home' && isUserSessionActive;
+    }
+
+    function updateSidebarLayout() {
+        if (!leftSidebar) return;
+
+        if (pageShouldHaveSidebar()) {
+            if (window.innerWidth >= 1200) { // Desktop view
+                body.classList.add('sidebar-enabled');
+                leftSidebar.classList.remove('show-sidebar'); // This class is for mobile
+            } else { // Mobile/Tablet view
+                body.classList.remove('sidebar-enabled');
+                // 'show-sidebar' will be toggled by buttons for mobile
+            }
+        } else { // Login page or no user session
+            body.classList.remove('sidebar-enabled');
+            leftSidebar.classList.remove('show-sidebar');
+        }
+    }
+
+    function toggleMobileSidebar() {
+        if (leftSidebar && window.innerWidth < 1200 && pageShouldHaveSidebar()) {
+            leftSidebar.classList.toggle('show-sidebar');
+            // Optional: Add an overlay to the body for mobile sidebar
+            // body.classList.toggle('sidebar-mobile-overlay');
+        }
+    }
+
+    if (sidebarToggler) {
+        sidebarToggler.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleMobileSidebar();
+        });
+    }
+    if (sidebarCloseBtnInside) {
+        sidebarCloseBtnInside.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleMobileSidebar();
+        });
+    }
+
+    // Initial layout update and on resize
+    updateSidebarLayout();
+    window.addEventListener('resize', updateSidebarLayout);
+
+    // Activate sidebar link based on current page (more robust query selection)
+    if (pageShouldHaveSidebar()) {
+        const currentQueryString = window.location.search; // e.g., "?page=student_dashboard"
+        const sidebarNav = document.querySelector('.sidebar-nav');
+
+        if (sidebarNav) {
+            const sidebarLinks = sidebarNav.querySelectorAll('a.sidebar-link');
+
+            sidebarLinks.forEach(link => {
+                // Exact match for href, or if href is part of a submenu structure
+                if (link.getAttribute('href') === currentQueryString) {
+                    link.classList.add('active');
+
+                    // Expand parent submenu if this link is inside one
+                    const parentCollapseEl = link.closest('.collapse');
+                    if (parentCollapseEl) {
+                        const triggerLink = document.querySelector(`a.sidebar-link[data-bs-target="#${parentCollapseEl.id}"]`);
+                        if (triggerLink) {
+                            triggerLink.setAttribute('aria-expanded', 'true');
+                            triggerLink.classList.remove('collapsed'); // Ensure trigger is not marked as collapsed
+                            // triggerLink.classList.add('active'); // Optionally make the main toggle active too
+                        }
+                        if (!parentCollapseEl.classList.contains('show')) {
+                            // Use Bootstrap's Collapse API to show
+                            const bsCollapse = bootstrap.Collapse.getInstance(parentCollapseEl) || new bootstrap.Collapse(parentCollapseEl, { toggle: false });
+                            bsCollapse.show();
+                        }
+                    }
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+    }
 });
 
-// ฟังก์ชันสำหรับการ confirm ก่อนลบข้อมูล
+// SweetAlert2 function for delete confirmation
 function confirmDelete(message = 'คุณแน่ใจหรือไม่ที่จะลบรายการนี้?') {
     return Swal.fire({
         title: 'ยืนยันการลบ',
         text: message,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
+        confirmButtonColor: 'var(--bs-danger)', // Use CSS variable
+        cancelButtonColor: '#6c757d', // Bootstrap secondary
         confirmButtonText: 'ใช่, ลบเลย!',
         cancelButtonText: 'ยกเลิก'
     }).then((result) => {
