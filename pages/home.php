@@ -11,86 +11,140 @@ if (isset($_SESSION['student_id'])) {
     exit;
 } elseif (isset($_SESSION['admin_id'])) {
     // หากเป็นผู้ดูแลระบบที่ล็อกอินแล้ว ให้ไปยังหน้า dashboard ของผู้ดูแลระบบ
+    // (แม้ว่าหน้านี้จะเน้นนักศึกษา แต่ถ้าแอดมินเข้ามาโดยตรงก็ redirect ไป)
     header("Location: index.php?page=admin_dashboard");
     exit;
 }
 
-// หากไม่ได้ล็อกอิน ให้แสดงหน้า home ปกติ
+// รวมไฟล์ configuration ของ Google
+include_once 'config/google_config.php';
+$google_config = new GoogleConfig();
+
+// หากมีการ submit form (คัดลอกจาก auth/student_login.php)
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // รับค่าจาก form
+    $student_id_form = isset($_POST['student_id']) ? $database->sanitize($_POST['student_id']) : '';
+    $id_card_form = isset($_POST['id_card']) ? $_POST['id_card'] : '';
+
+    // ตรวจสอบว่าข้อมูลถูกส่งมาหรือไม่
+    if (!empty($student_id_form) && !empty($id_card_form)) {
+        try {
+            // เตรียมคำสั่ง SQL
+            $query = "SELECT * FROM students WHERE student_id = :student_id LIMIT 0,1";
+            
+            // เตรียมคำสั่ง
+            $stmt = $db->prepare($query);
+            
+            // Bind param
+            $stmt->bindParam(':student_id', $student_id_form);
+            
+            // Execute
+            $stmt->execute();
+            
+            // ตรวจสอบว่ามีข้อมูลหรือไม่
+            if ($stmt->rowCount() > 0) {
+                // ดึงข้อมูล
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                $password_valid = false;
+                
+                // ตรวจสอบรหัสผ่าน
+                // หากมี password_hash ให้ใช้ password_verify
+                if (!empty($row['password_hash'])) {
+                    $password_valid = password_verify($id_card_form, $row['password_hash']);
+                } else {
+                    // หากไม่มี password_hash (ข้อมูลเก่า) ให้เปรียบเทียบ id_card โดยตรง และ hash ใหม่ถ้าตรง
+                    if ($row['id_card'] == $id_card_form) {
+                        $password_valid = true;
+                        // สร้าง hash สำหรับข้อมูลเก่าที่ยังไม่ได้ hash
+                        $password_hash = password_hash($id_card_form, PASSWORD_DEFAULT);
+                        $update_hash_query = "UPDATE students SET password_hash = :password_hash WHERE id = :id";
+                        $update_hash_stmt = $db->prepare($update_hash_query);
+                        $update_hash_stmt->bindParam(':password_hash', $password_hash);
+                        $update_hash_stmt->bindParam(':id', $row['id']);
+                        $update_hash_stmt->execute();
+                    }
+                }
+                
+                if ($password_valid) {
+                    // ล็อกอินสำเร็จ
+                    $_SESSION['student_id'] = $row['id'];
+                    $_SESSION['student_code'] = $row['student_id'];
+                    $_SESSION['student_name'] = $row['firstname'] . ' ' . $row['lastname'];
+                    $_SESSION['student_email'] = $row['email'];
+                    
+                    // ตรวจสอบ first_login (ถ้ายังไม่ได้เชื่อม Google อาจจะแสดง popup)
+                    if ($row['first_login'] == 1 && !empty($row['email'])) {
+                        $_SESSION['show_google_link'] = true;
+                    }
+                    
+                    // อัพเดต first_login status
+                    $update_first_login_query = "UPDATE students SET first_login = 0 WHERE id = :id";
+                    $update_first_login_stmt = $db->prepare($update_first_login_query);
+                    $update_first_login_stmt->bindParam(':id', $row['id']);
+                    $update_first_login_stmt->execute();
+                    
+                    // Redirect ไปยังหน้า dashboard ของนักศึกษา
+                    header("Location: index.php?page=student_dashboard");
+                    exit;
+                } else {
+                    $login_error = "รหัสบัตรประชาชนไม่ถูกต้อง";
+                }
+            } else {
+                $login_error = "ไม่พบรหัสนักศึกษานี้ในระบบ";
+            }
+        } catch(PDOException $e) {
+            $login_error = "เกิดข้อผิดพลาด: " . $e->getMessage();
+        }
+    } else {
+        $login_error = "กรุณากรอกข้อมูลให้ครบถ้วน";
+    }
+}
+
+// ดึงข้อความแจ้งเตือนจาก session (ถ้ามี)
+if (isset($_SESSION['auth_error'])) {
+    $login_error = $_SESSION['auth_error'];
+    unset($_SESSION['auth_error']);
+}
 ?>
 
 <div class="row justify-content-center">
-    <div class="col-md-8 text-center">
-        <h1 class="display-4 mt-5 mb-4">ระบบจัดการนักศึกษา</h1>
-        <p class="lead mb-5">ยินดีต้อนรับเข้าสู่ระบบจัดการข้อมูลนักศึกษา</p>
-    </div>
-</div>
-
-<div class="row justify-content-center">
-    <div class="col-md-5">
-        <div class="card shadow mb-4">
+    <div class="col-md-6">
+        <div class="card shadow mt-5">
             <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0">สำหรับนักศึกษา</h5>
+                <h4 class="mb-0">เข้าสู่ระบบสำหรับนักศึกษา</h4>
             </div>
             <div class="card-body">
-                <p>เข้าสู่ระบบด้วยรหัสนักศึกษาและรหัสบัตรประชาชน</p>
-                <p>หลังจากเข้าสู่ระบบครั้งแรก คุณสามารถเชื่อมต่อกับบัญชี Google เพื่อให้เข้าสู่ระบบได้สะดวกในครั้งต่อไป</p>
+                <?php if(isset($login_error)): ?>
+                    <div class="alert alert-danger" role="alert">
+                        <?php echo $login_error; ?>
+                    </div>
+                <?php endif; ?>
+                
+                <form action="?page=home" method="post">
+                    <div class="mb-3">
+                        <label for="student_id" class="form-label">รหัสนักศึกษา</label>
+                        <input type="text" class="form-control" id="student_id" name="student_id" required value="<?php echo isset($student_id_form) ? htmlspecialchars($student_id_form) : ''; ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_card" class="form-label">รหัสบัตรประชาชน</label>
+                        <input type="password" class="form-control" id="id_card" name="id_card" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">เข้าสู่ระบบ</button>
+                </form>
+                
+                <hr>
+                
                 <div class="text-center">
-                    <a href="?page=student_login" class="btn btn-primary"><i class="fas fa-user-graduate"></i> เข้าสู่ระบบสำหรับนักศึกษา</a>
+                    <p>หรือเข้าสู่ระบบด้วย</p>
+                    <a href="?page=google_login&user_type=student" class="btn btn-outline-danger">
+                        <i class="fab fa-google me-2"></i>เข้าสู่ระบบด้วย Google
+                    </a>
                 </div>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-5">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-success text-white">
-                <h5 class="card-title mb-0">สำหรับผู้ดูแลระบบ</h5>
-            </div>
-            <div class="card-body">
-                <p>เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่าน</p>
-                <p>ผู้ดูแลระบบสามารถจัดการข้อมูลนักศึกษา เพิ่ม แก้ไข และดูข้อมูลต่างๆ ในระบบได้</p>
-                <div class="text-center">
-                    <a href="?page=admin_login" class="btn btn-success"><i class="fas fa-user-shield"></i> เข้าสู่ระบบสำหรับผู้ดูแลระบบ</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row justify-content-center mt-5">
-    <div class="col-md-10">
-        <div class="alert alert-info alert-permanent">
-            <h5><i class="fas fa-info-circle"></i> วิธีการใช้งานเบื้องต้น</h5>
-            <hr>
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>สำหรับนักศึกษา</h6>
-                    <ol>
-                        <li>เข้าสู่ระบบด้วยรหัสนักศึกษาและรหัสบัตรประชาชน</li>
-                        <li>ในการเข้าสู่ระบบครั้งแรก ระบบจะแนะนำให้เชื่อมต่อกับบัญชี Google</li>
-                        <li>เมื่อเชื่อมต่อแล้ว ครั้งต่อไปสามารถล็อกอินผ่าน Google ได้ทันที</li>
-                        <li>สามารถดูและแก้ไขข้อมูลส่วนตัวได้ในหน้าโปรไฟล์</li>
-                    </ol>
-                </div>
-                <div class="col-md-6">
-                    <h6>สำหรับผู้ดูแลระบบ</h6>
-                    <ol>
-                        <li>เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่าน</li>
-                        <li>สามารถเพิ่มนักศึกษาได้ทั้งแบบรายบุคคลและแบบกลุ่ม</li>
-                        <li>ดูและแก้ไขข้อมูลนักศึกษาได้ในหน้าจัดการผู้ใช้งาน</li>
-                        <li>สามารถรีเซ็ตรหัสบัตรประชาชนและยกเลิกการเชื่อมต่อ Google ได้</li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- แสดงข้อความแจ้งเตือนสำหรับผู้ใช้ที่ยังไม่ได้ล็อกอิน -->
-<div class="row justify-content-center mt-4">
-    <div class="col-md-8 text-center">
-        <div class="alert alert-light border">
-            <p class="mb-0"><i class="fas fa-lightbulb text-warning"></i> <strong>เริ่มต้นใช้งาน:</strong> เลือกประเภทผู้ใช้ข้างต้นเพื่อเข้าสู่ระบบ หากมีปัญหาการเข้าสู่ระบบ กรุณาติดต่อผู้ดูแลระบบ</p>
+         <div class="text-center mt-3">
+            <small class="text-muted">ผู้ดูแลระบบกรุณาเข้าสู่ระบบผ่าน <a href="<?php echo $base_url; ?>?page=admin_login">URL สำหรับผู้ดูแลระบบ</a></small>
         </div>
     </div>
 </div>
