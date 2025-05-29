@@ -11,8 +11,8 @@
     --bs-body-font-family: 'Prompt', sans-serif;
     --bs-body-bg: var(--bs-light);
     --bs-link-hover-decoration: none;
-    --sidebar-width: 270px;
-    --navbar-height: 70px;
+    --sidebar-width: 270px; /* ความกว้างของ Sidebar */
+    --navbar-height: 70px;  /* ความสูงของ Navbar */
 }
 
 body {
@@ -21,12 +21,13 @@ body {
     color: var(--bs-dark);
     font-weight: 400;
     line-height: 1.5;
-    overflow-x: hidden; /* ป้องกันการ scroll แนวนอน */
+    overflow-x: hidden; /* ป้องกัน horizontal scroll ที่ไม่จำเป็น */
 }
 
+/* Layout Wrappers */
 .page-wrapper {
-    display: flex;
-    flex-direction: column;
+    display: flex; /* ใช้ flex สำหรับ layout หลัก */
+    flex-direction: row; /* Sidebar และ content อยู่ในแถวเดียวกัน */
     min-height: 100vh;
     background-color: var(--bs-body-bg);
     position: relative; /* สำหรับ stacking context */
@@ -36,55 +37,56 @@ body {
 .left-sidebar {
     width: var(--sidebar-width);
     background: #fff;
-    position: fixed;
+    position: fixed; /* Sidebar จะ fixed ด้านซ้าย */
     height: 100%;
     top: 0;
-    left: calc(var(--sidebar-width) * -1); /* เริ่มต้นซ่อนไว้ด้านซ้าย JS จะจัดการการแสดงผล */
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
-    transition: left .3s ease-in-out;
-    z-index: 1030; /* ให้ Sidebar อยู่เหนือ Navbar เล็กน้อย */
+    left: calc(var(--sidebar-width) * -1); /* เริ่มต้นซ่อนไว้ทางซ้ายสุด */
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+    transition: left 0.3s ease-in-out;
+    z-index: 1030; /* ให้ Sidebar อยู่บนสุด */
+    display: flex;
+    flex-direction: column;
 }
 
-.left-sidebar.show-sidebar { /* คลาสนี้จะถูก toggle ด้วย JS สำหรับ mobile view */
+.left-sidebar.show-sidebar { /* JS จะ toggle class นี้สำหรับ mobile */
     left: 0;
 }
 
 .brand-logo {
-    padding: 0 20px; /* ปรับ padding ให้เหมาะสม */
-    height: var(--navbar-height); /* ให้ความสูงเท่า Navbar */
+    padding: 0 20px;
+    height: var(--navbar-height);
     display: flex;
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0; /* ไม่ให้ brand-logo หดเมื่อเนื้อหาเยอะ */
 }
 
-.brand-logo .logo-img { /* ปรับปรุงสำหรับข้อความหรือรูปภาพ */
+.brand-logo .logo-img {
     display: flex;
     align-items: center;
     text-decoration: none;
 }
-
 .brand-logo .logo-img img {
-    height: 35px; /* ความสูงของโลโก้ (ถ้ามี) */
+    height: 35px;
     margin-right: 10px;
 }
-.brand-logo .logo-img h4 { /* สำหรับชื่อระบบใน Sidebar */
+.brand-logo .logo-img h4 {
     margin-bottom: 0;
-    font-size: 1.25rem; /* ปรับขนาดตามความเหมาะสม */
+    font-size: 1.25rem;
+    color: var(--bs-primary); /* ให้สีตรงกับธีม */
 }
-
-.close-btn { /* ปุ่มปิด Sidebar ใน mobile */
+.close-btn {
     cursor: pointer;
-    padding: 10px; /* เพิ่มพื้นที่คลิก */
+    padding: 10px;
+    color: var(--bs-dark);
 }
 
 .sidebar-nav {
+    flex-grow: 1; /* ให้ส่วน nav ขยายเต็มพื้นที่ที่เหลือ */
     padding: 15px 0;
-    height: calc(100vh - var(--navbar-height)); /* ความสูงของ Sidebar nav */
-    overflow-y: auto;
+    overflow-y: auto; /* ให้ scroll ได้ถ้าเมนูยาว */
 }
-
-/* SimpleBar scrollbar (ถ้าใช้) */
 .simplebar-scrollbar:before {
     background: rgba(0,0,0,.2) !important;
 }
@@ -92,27 +94,25 @@ body {
 .sidebar-nav ul {
     list-style: none;
     padding-left: 0;
-    margin-bottom: 0; /* ลบ margin ล่างของ ul */
+    margin-bottom: 0;
 }
-
 .nav-small-cap {
-    padding: 12px 25px; /* ปรับ padding */
+    padding: 12px 25px;
     font-size: .75rem;
     color: #7c8fac;
     font-weight: 500;
     display: flex;
     align-items: center;
-    text-transform: uppercase; /* ทำให้เป็นตัวพิมพ์ใหญ่ */
+    text-transform: uppercase;
 }
 .nav-small-cap-icon {
     margin-right: 8px;
-    font-size: 1rem; /* ปรับขนาดไอคอน */
+    font-size: 1rem;
 }
 
 .sidebar-item {
-    margin-bottom: 2px; /* ระยะห่างระหว่าง item */
+    margin-bottom: 2px;
 }
-
 .sidebar-link {
     display: flex;
     align-items: center;
@@ -125,23 +125,20 @@ body {
     transition: background-color 0.2s ease, color 0.2s ease;
     text-decoration: none;
 }
-
-.sidebar-link span i, /* สำหรับไอคอนที่อยู่ใน <span> */
-.sidebar-link > i /* สำหรับไอคอนที่อยู่นอก <span> โดยตรง */ {
+.sidebar-link span i,
+.sidebar-link > i {
     font-size: 1.1rem;
-    min-width: 24px; /* ให้ไอคอนมีพื้นที่เท่ากัน */
-    text-align: center; /* จัดไอคอนให้อยู่กลาง */
+    min-width: 24px;
+    text-align: center;
     margin-right: 10px;
     color: #5a6a85;
     transition: color 0.2s ease;
     line-height: 1;
 }
-
 .sidebar-link .hide-menu {
     transition: opacity 0.3s;
-    white-space: nowrap; /* ป้องกันข้อความตกบรรทัด */
+    white-space: nowrap;
 }
-
 .sidebar-link:hover,
 .sidebar-link.active {
     background-color: var(--bs-primary);
@@ -155,26 +152,27 @@ body {
 }
 
 /* Submenu */
-.sidebar-item .collapse { /* สำหรับ ul ของ submenu */
-    margin-left: 10px; /* ย่อหน้า submenu group */
-    border-left: 2px solid rgba(var(--bs-primary-rgb), 0.2); /* เส้นประนำทาง submenu */
-    padding-left: 5px; /* ระยะห่างจากเส้นประ */
+.sidebar-item .collapse {
+    margin-left: 10px;
+    border-left: 2px solid rgba(var(--bs-primary-rgb), 0.2);
+    padding-left: 5px; /* Reset padding that might come from ul */
+    background-color: rgba(var(--bs-primary-rgb), 0.03); /* Slight background for submenu area */
+    border-radius: 0 0 7px 7px; /* Rounded bottom corners */
 }
-.sidebar-item .collapse .sidebar-link { /* Link ภายใน submenu */
+.sidebar-item .collapse .sidebar-link {
     font-size: 0.85rem;
     padding-top: 8px;
     padding-bottom: 8px;
-    padding-left: 20px; /* ย่อหน้า link ใน submenu เพิ่มเติม */
-    margin: 2px 0; /* ลด margin ของ link ใน submenu */
+    padding-left: 20px;
+    margin: 2px 5px 2px 0; /* Adjust margin for submenu links */
 }
 .sidebar-item .collapse .sidebar-link i.me-2 {
     margin-right: 8px !important;
     font-size: 0.8rem;
 }
-
 .sidebar-item .collapse .sidebar-link:hover,
 .sidebar-item .collapse .sidebar-link.active {
-    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    background-color: rgba(var(--bs-primary-rgb), 0.15); /* Darker hover for submenu */
     color: var(--bs-primary);
 }
 .sidebar-item .collapse .sidebar-link:hover span i,
@@ -183,72 +181,68 @@ body {
 .sidebar-item .collapse .sidebar-link.active i.me-2 {
      color: var(--bs-primary);
 }
-
-.sidebar-link i.float-end.fas.fa-chevron-down { /* Chevron สำหรับ submenu toggle */
+.sidebar-link i.float-end.fas.fa-chevron-down {
     margin-left: auto;
     transition: transform 0.3s ease;
-    font-size: 0.75rem; /* ปรับขนาด chevron */
+    font-size: 0.75rem;
 }
 .sidebar-link[aria-expanded="true"] i.float-end.fas.fa-chevron-down {
     transform: rotate(180deg);
 }
 
-/* Main Content (Body Wrapper) */
+/* Main Content Area (body-wrapper) */
 .body-wrapper {
-    flex-grow: 1;
-    transition: margin-left .3s ease-in-out;
-    padding-top: var(--navbar-height);
-    width: 100%;
-    margin-left: 0; /* เริ่มต้น content ชิดซ้าย */
+    flex-grow: 1; /* ให้ content ขยายเต็มพื้นที่ที่เหลือ */
+    padding-top: var(--navbar-height); /* เว้นที่สำหรับ Navbar ด้านบน */
+    width: 100%; /* Default เต็มความกว้าง */
+    margin-left: 0; /* Default ไม่มี margin ซ้าย */
+    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+    position: relative; /* Ensure it's part of the flow */
 }
 
 /* Header (Navbar on top) */
 .app-header {
     background-color: #fff;
     height: var(--navbar-height);
-    box-shadow: 0 1px 8px rgba(0,0,0,.1);
-    display: flex; /* ใช้ Flexbox */
-    align-items: center; /* จัดกึ่งกลางแนวตั้ง */
-    position: fixed;
+    box-shadow: 0 1px 8px rgba(0,0,0,.07); /* ลดเงาเล็กน้อย */
+    display: flex;
+    align-items: center;
+    position: fixed; /* Navbar ติดด้านบน */
     top: 0;
-    left: 0;
+    left: 0; /* เริ่มต้นเต็มความกว้าง */
     right: 0;
-    transition: left .3s ease-in-out, width .3s ease-in-out;
+    transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
     z-index: 1020; /* Navbar อยู่เหนือ content แต่หลัง Sidebar */
 }
 
 .app-header .navbar {
     display: flex;
-    justify-content: space-between; /* ดัน User menu ไปทางขวา */
+    justify-content: space-between;
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 1.25rem; /* padding ซ้ายขวาของ Navbar */
+    padding: 0 1.25rem; /* 20px padding */
 }
-
-/* Hamburger menu icon */
-.app-header .navbar-nav:first-child {
-    /* กลุ่มแรก (สำหรับ hamburger) จะไม่ถูกดัน */
+.app-header .navbar-nav:first-child { /* สำหรับ Hamburger */
+    /* No specific margin needed if using space-between on .navbar */
 }
-
-/* User menu */
-.app-header .navbar-collapse {
-    flex-grow: 0; /* ไม่ให้ user menu ขยายเต็ม */
+.app-header .navbar-collapse { /* สำหรับ User Menu */
+    flex-basis: auto !important; /* Override Bootstrap's flex-basis */
+    flex-grow: 0; /* ไม่ให้ User Menu ขยาย */
 }
 
 .navbar-nav .nav-link.sidebartoggler {
     font-size: 1.2rem;
     color: var(--bs-dark);
-    padding: 0.5rem; /* เพิ่ม padding ให้คลิกง่าย */
+    padding: 0.5rem;
 }
 .navbar-nav .nav-link.nav-icon-hover i {
     font-size: 1.3rem;
     color: var(--bs-dark);
 }
-
-.dropdown-menu .message-body { /* เนื้อหาใน dropdown user */
+.dropdown-menu .message-body {
     padding: 15px;
-    min-width: 250px; /* ปรับความกว้าง dropdown */
+    min-width: 250px;
 }
 .dropdown-menu .dropdown-header {
     font-weight: 600;
@@ -258,9 +252,9 @@ body {
     color: var(--bs-dark);
 }
 .dropdown-menu .dropdown-item {
-    padding: 0.5rem 1rem; /* ปรับ padding ของ dropdown item */
+    padding: 0.5rem 1rem;
 }
-.dropdown-menu .btn-outline-primary { /* ปุ่มออกจากระบบใน dropdown */
+.dropdown-menu .btn-outline-primary {
     font-size: 0.875rem;
     padding: 0.375rem 0.75rem;
 }
@@ -268,36 +262,45 @@ body {
 /* เมื่อ Sidebar แสดงผลบน Desktop (>=1200px) */
 body.sidebar-enabled .body-wrapper {
     margin-left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
+    width: calc(100% - var(--sidebar-width)); /* Content area width */
 }
 body.sidebar-enabled .app-header {
     left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
+    width: calc(100% - var(--sidebar-width)); /* Navbar width */
 }
 body.sidebar-enabled .left-sidebar {
-    left: 0; /* แสดง Sidebar บน Desktop */
+    left: 0; /* แสดง Sidebar */
 }
 
 /* Container for page content */
 .container-fluid {
     padding: 25px;
-    min-height: calc(100vh - var(--navbar-height) - var(--footer-height, 0px)); /* ลบความสูง footer ถ้ามี */
-    /* หากมี footer ให้กำหนด --footer-height ใน :root */
+    min-height: calc(100vh - var(--navbar-height));
 }
-.container-fluid.is-login-page { /* สำหรับหน้า login */
+.container-fluid.is-login-page {
     padding: 0;
     display: flex;
     flex-grow: 1;
     align-items: center;
     justify-content: center;
+    /* Remove body-wrapper margin for login page via JS if needed, or specific class */
+}
+body.login-page-active .body-wrapper { /* Add this class to body in login page via PHP/JS */
+    margin-left: 0 !important;
+    width: 100% !important;
+}
+body.login-page-active .app-header {
+    left: 0 !important;
+    width: 100% !important;
 }
 
-/* Responsive Sidebar - Mobile/Tablet */
-@media (max-width: 1199.98px) {
-    /* left-sidebar เริ่มต้นซ่อน (left: calc(var(--sidebar-width) * -1);) */
-    /* คลาส .show-sidebar จะถูก JS สลับเพื่อแสดงผล */
 
-    /* บน mobile, body-wrapper และ app-header จะเต็มความกว้างเสมอ */
+/* Responsive: Mobile/Tablet (<1200px) */
+@media (max-width: 1199.98px) {
+    /* Sidebar starts hidden (left: calc(var(--sidebar-width) * -1);) */
+    /* .show-sidebar class (added by JS) makes it visible */
+
+    /* On mobile, body-wrapper and app-header are always full width */
     .body-wrapper {
         margin-left: 0 !important;
         width: 100% !important;
@@ -306,12 +309,9 @@ body.sidebar-enabled .left-sidebar {
         left: 0 !important;
         width: 100% !important;
     }
-    /* บน mobile, ถ้า body มี .sidebar-enabled ไม่ต้องทำอะไรกับ left-sidebar ที่นี่ JS จะจัดการผ่าน .show-sidebar */
-    body.sidebar-enabled .left-sidebar {
-         left: calc(var(--sidebar-width) * -1); /* ยังคงซ่อนไว้ จนกว่า .show-sidebar จะถูกเพิ่ม */
-    }
-    body.sidebar-enabled .left-sidebar.show-sidebar {
-        left: 0; /* แสดงเมื่อมี .show-sidebar */
+    /* Ensure that even if sidebar-enabled is on body, mobile still hides sidebar by default */
+    body.sidebar-enabled .left-sidebar:not(.show-sidebar) {
+         left: calc(var(--sidebar-width) * -1);
     }
 }
 
@@ -334,7 +334,7 @@ body.sidebar-enabled .left-sidebar {
     border-radius: 0.5rem;
     box-shadow: 0px 5px 20px rgba(0, 0, 0, 0.05);
 }
-.login-card .card-header h4 { /* เดิมซ้ำ, แต่เพื่อให้แน่ใจ */
+.login-card .card-header h4 {
     font-weight: 700;
     color: var(--bs-primary);
 }
@@ -346,12 +346,12 @@ body.sidebar-enabled .left-sidebar {
     max-height: 60px;
 }
 
-/* --- General Elements (Cards, Buttons, Forms, Alerts, etc. from previous provided CSS) --- */
+/* --- General Elements (Cards, Buttons, Forms, Alerts, etc.) --- */
 /* Navbar (General, if any specific styling needed beyond app-header's navbar) */
 .navbar-brand img {
     max-height: 35px;
 }
-.navbar-nav .nav-link { /* General nav-link if used outside sidebar/app-header */
+.navbar-nav .nav-link {
     color: #5a6a85;
     font-weight: 500;
     padding: 0.5rem 1rem;
@@ -435,7 +435,7 @@ body.sidebar-enabled .left-sidebar {
 }
 .form-control:focus {
     border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25); /* Use RGB version for shadow */
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
 }
 .form-text {
     font-size: 0.875em;
@@ -449,7 +449,7 @@ body.sidebar-enabled .left-sidebar {
     padding: 1rem 1.25rem;
 }
 .alert-dismissible .btn-close {
-    padding: 1.15rem 1.25rem; /* Adjust close button padding */
+    padding: 1.15rem 1.25rem;
 }
 
 /* SweetAlert2 */
