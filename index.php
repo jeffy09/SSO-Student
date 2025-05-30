@@ -19,8 +19,6 @@ $db = $database->getConnection();
 // กำหนด base URL
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
 $host = $_SERVER['HTTP_HOST'];
-// dirname($_SERVER['PHP_SELF']) อาจให้ผลลัพธ์เป็น '\' หรือ '.' ในบางกรณี
-// ดังนั้นควรจัดการให้เป็น string ว่างถ้าเป็น root directory
 $script_dir = dirname($_SERVER['SCRIPT_NAME']);
 $base_path = ($script_dir === '/' || $script_dir === '\\' || $script_dir === '.') ? '' : $script_dir;
 $base_url = $protocol . "://" . $host . $base_path;
@@ -29,26 +27,55 @@ $base_url = $protocol . "://" . $host . $base_path;
 // รับค่า page จาก URL (ใช้ $_GET)
 $page = isset($_GET['page']) ? $_GET['page'] : '';
 
+// ---- Redirect ผู้ใช้ที่ล็อกอินแล้วไปยังหน้า dashboard ที่ถูกต้อง ----
+if (isset($_SESSION['student_id'])) {
+    if ($page === '' || $page === 'home' || $page === 'student_login' || $page === 'admin_login' || $page === 'teacher_login') {
+        header("Location: {$base_url}?page=student_dashboard");
+        exit;
+    }
+} elseif (isset($_SESSION['admin_id'])) {
+     if ($page === '' || $page === 'home' || $page === 'student_login' || $page === 'admin_login' || $page === 'teacher_login') {
+        header("Location: {$base_url}?page=admin_dashboard");
+        exit;
+    }
+} elseif (isset($_SESSION['teacher_user_id'])) { // เพิ่มการตรวจสอบ session ของอาจารย์
+     if ($page === '' || $page === 'home' || $page === 'student_login' || $page === 'admin_login' || $page === 'teacher_login') {
+        header("Location: {$base_url}?page=teacher_dashboard");
+        exit;
+    }
+}
+
+
 // ---- จัดการหน้าพิเศษที่ต้องทำงานก่อน Output HTML ----
 
 // 1. จัดการ Logout ก่อนที่จะ output HTML ใดๆ
 if ($page === 'logout') {
-    include_once 'auth/logout.php'; // auth/logout.php จะมี header() และ exit;
-    // ไม่ควรมีโค้ดใดๆ ทำงานต่อจากนี้ถ้าเป็นหน้า logout
-    // ob_end_flush(); // หรือ ob_end_clean(); ถ้าไม่ต้องการ output ใดๆ จาก logout.php (ซึ่งไม่ควรมี)
-    // exit; // exit อยู่ใน logout.php แล้ว
+    include_once 'auth/logout.php';
+    // exit อยู่ใน logout.php แล้ว
 }
 
 // 2. ตรวจสอบหน้าพิเศษสำหรับตรวจสอบการตั้งค่า Google
 if ($page === 'check_google_config') {
     include_once 'auth/check_google_config.php';
-    ob_end_flush(); // ส่ง output ของ check_google_config.php
+    ob_end_flush();
     exit;
 }
 
-// 3. ตรวจสอบ API สำหรับตรวจสอบสถานะ Token (เพิ่มใหม่)
+// 3. ตรวจสอบ API สำหรับตรวจสอบสถานะ Token
 if ($page === 'check_token_status') {
-    if (!isset($_SESSION['student_id'])) {
+    $user_id_session = null;
+    $user_table_for_token = '';
+
+    if (isset($_SESSION['student_id'])) {
+        $user_id_session = $_SESSION['student_id'];
+        $user_table_for_token = 'students';
+    } elseif (isset($_SESSION['teacher_user_id'])) {
+        $user_id_session = $_SESSION['teacher_user_id'];
+        $user_table_for_token = 'teachers';
+    }
+    // Admin token check can be added here if needed
+
+    if (!$user_id_session) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
         ob_end_flush();
@@ -65,10 +92,9 @@ if ($page === 'check_token_status') {
     header('Content-Type: application/json');
 
     try {
-        $student_id = $_SESSION['student_id'];
-        $query = "SELECT google_id, access_token as google_access_token, refresh_token as google_refresh_token, token_expires_at FROM students WHERE id = :id"; // แก้ไขชื่อคอลัมน์
+        $query = "SELECT google_id, access_token, refresh_token, token_expires_at FROM {$user_table_for_token} WHERE id = :id";
         $stmt = $db->prepare($query);
-        $stmt->bindParam(':id', $student_id);
+        $stmt->bindParam(':id', $user_id_session);
         $stmt->execute();
 
         if ($stmt->rowCount() === 0) {
@@ -76,34 +102,34 @@ if ($page === 'check_token_status') {
             ob_end_flush();
             exit;
         }
-        $student_token_data = $stmt->fetch(PDO::FETCH_ASSOC);
+        $token_data = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (empty($student_token_data['google_id'])) {
+        if (empty($token_data['google_id'])) {
             echo json_encode(['connected' => false, 'expired' => false, 'needs_reconnect' => false, 'message' => 'ยังไม่ได้เชื่อมต่อบัญชี Google']);
             ob_end_flush();
             exit;
         }
-        if (empty($student_token_data['google_access_token'])) {
+        if (empty($token_data['access_token'])) {
             echo json_encode(['connected' => true, 'expired' => true, 'needs_reconnect' => true, 'message' => 'ไม่มี access token']);
             ob_end_flush();
             exit;
         }
-        if (!empty($student_token_data['token_expires_at'])) {
-            $expires_at = new DateTime($student_token_data['token_expires_at']);
+        if (!empty($token_data['token_expires_at'])) {
+            $expires_at = new DateTime($token_data['token_expires_at']);
             $now = new DateTime();
             $time_diff = $expires_at->getTimestamp() - $now->getTimestamp();
 
             if ($time_diff <= 0) {
-                echo json_encode(['connected' => true, 'expired' => true, 'needs_reconnect' => true, 'message' => 'Token หมดอายุแล้ว', 'expired_at' => $student_token_data['token_expires_at']]);
+                echo json_encode(['connected' => true, 'expired' => true, 'needs_reconnect' => true, 'message' => 'Token หมดอายุแล้ว', 'expired_at' => $token_data['token_expires_at']]);
                 ob_end_flush();
                 exit;
-            } elseif ($time_diff <= 300) {
-                echo json_encode(['connected' => true, 'expired' => false, 'needs_reconnect' => false, 'near_expiry' => true, 'message' => 'Token ใกล้หมดอายุ', 'expires_in' => $time_diff, 'expired_at' => $student_token_data['token_expires_at']]);
+            } elseif ($time_diff <= 300) { // 5 minutes
+                echo json_encode(['connected' => true, 'expired' => false, 'near_expiry' => true, 'message' => 'Token ใกล้หมดอายุ', 'expires_in' => $time_diff, 'expired_at' => $token_data['token_expires_at']]);
                 ob_end_flush();
                 exit;
             }
         }
-        echo json_encode(['connected' => true, 'expired' => false, 'needs_reconnect' => false, 'message' => 'Token ยังใช้ได้', 'expires_at' => $student_token_data['token_expires_at']]);
+        echo json_encode(['connected' => true, 'expired' => false, 'needs_reconnect' => false, 'message' => 'Token ยังใช้ได้', 'expires_at' => $token_data['token_expires_at']]);
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error', 'message' => 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล']);
@@ -115,46 +141,43 @@ if ($page === 'check_token_status') {
     exit;
 }
 
+
 // ---- สิ้นสุดการจัดการหน้าพิเศษ ----
 
 
-// ส่วนหัวของเว็บไซต์ (Header) - จะถูก include ถ้าไม่ใช่หน้าพิเศษที่ exit ไปแล้ว
-include_once 'includes/header.php'; //
+// ส่วนหัวของเว็บไซต์ (Header)
+include_once 'includes/header.php';
 
 // ตรวจสอบไฟล์ที่ต้องการโหลด
-// (Switch case จะไม่ถูกเรียกถ้า $page เป็น 'logout', 'check_google_config', หรือ 'check_token_status' เพราะ script จะ exit ไปก่อน)
 switch ($page) {
     // หน้าหลัก
     case '':
     case 'home':
-        include_once 'pages/home.php'; //
+        include_once 'pages/home.php';
         break;
 
     // ส่วนของการยืนยันตัวตน (ยกเว้น logout ที่จัดการไปแล้ว)
-    case 'login': // หน้านี้อาจไม่ถูกใช้โดยตรงแล้ว ถ้ามี student_login และ admin_login
-        include_once 'auth/login.php';
-        break;
     case 'student_login':
-        include_once 'auth/student_login.php'; //
+        include_once 'auth/student_login.php';
         break;
     case 'admin_login':
-        include_once 'auth/admin_login.php'; //
+        include_once 'auth/admin_login.php';
+        break;
+    case 'teacher_login': // เพิ่มหน้าล็อกอินอาจารย์
+        include_once 'auth/teacher_login.php';
         break;
     case 'google_login':
-        include_once 'auth/google_login.php'; //
+        include_once 'auth/google_login.php';
         break;
     case 'google_callback':
-        include_once 'auth/google_callback.php'; //
+        include_once 'auth/google_callback.php';
         break;
 
     // ส่วนของนักศึกษา
     case 'student_dashboard':
         if (isset($_SESSION['student_id'])) {
-            // แก้ไขชื่อไฟล์จาก dashborad.php เป็น dashboard.php ตามที่ควรจะเป็น
-            if (file_exists('student/dashboard.php')) {
-                include_once 'student/dashboard.php';
-            } else if (file_exists('student/dashborad.php')) { // Fallback เผื่อยังไม่ได้แก้ชื่อไฟล์
-                include_once 'student/dashborad.php'; //
+            if (file_exists('student/dashboard.php')) { //
+                include_once 'student/dashboard.php'; //
             } else {
                 include_once 'pages/404.php'; //
             }
@@ -181,7 +204,7 @@ switch ($page) {
         break;
     case 'helpdesk':
         if (isset($_SESSION['student_id'])) {
-            include_once 'student/helpdesk.php';
+            include_once 'student/helpdesk.php'; //
         } else {
             header("Location: {$base_url}?page=student_login");
             exit;
@@ -189,7 +212,7 @@ switch ($page) {
         break;
     case 'helpdesk_create':
         if (isset($_SESSION['student_id'])) {
-            include_once 'student/helpdesk_create.php';
+            include_once 'student/helpdesk_create.php'; //
         } else {
             header("Location: {$base_url}?page=student_login");
             exit;
@@ -197,12 +220,40 @@ switch ($page) {
         break;
     case 'helpdesk_view':
         if (isset($_SESSION['student_id'])) {
-            include_once 'student/helpdesk_view.php';
+            include_once 'student/helpdesk_view.php'; //
         } else {
             header("Location: {$base_url}?page=student_login");
             exit;
         }
         break;
+
+    // ส่วนของอาจารย์ (ใหม่)
+    case 'teacher_dashboard':
+        if (isset($_SESSION['teacher_user_id'])) {
+            if (file_exists('teacher/dashboard.php')) {
+                include_once 'teacher/dashboard.php';
+            } else {
+                include_once 'pages/404.php'; //
+            }
+        } else {
+            header("Location: {$base_url}?page=teacher_login");
+            exit;
+        }
+        break;
+    case 'teacher_profile':
+        if (isset($_SESSION['teacher_user_id'])) {
+             if (file_exists('teacher/profile.php')) {
+                include_once 'teacher/profile.php';
+            } else {
+                include_once 'pages/404.php'; //
+            }
+        } else {
+            header("Location: {$base_url}?page=teacher_login");
+            exit;
+        }
+        break;
+    // สามารถเพิ่มหน้าอื่นๆ สำหรับอาจารย์ได้ที่นี่
+
 
     // ส่วนของผู้ดูแลระบบ
     case 'admin_dashboard':
@@ -261,12 +312,11 @@ switch ($page) {
             exit;
         }
         break;
-    case 'admin_unlink_google': // หน้านี้ควรเป็น action ไม่ใช่ page ที่แสดงผล HTML โดยตรง
-        // แนะนำให้เปลี่ยนเป็น POST request ไปยัง admin_profile แล้วจัดการ logic ที่นั่น
+    case 'admin_unlink_google':
         if (isset($_SESSION['admin_id'])) {
-            if (file_exists('admin/unlink_google.php')) { // ตรวจสอบชื่อไฟล์ให้ถูกต้อง
+            if (file_exists('admin/unlink_google.php')) {
                 include_once 'admin/unlink_google.php';
-            } else if (file_exists('admin/unlink.google.php')) { // ชื่อไฟล์เดิมที่คุณให้มา
+            } else if (file_exists('admin/unlink.google.php')) {
                 include_once 'admin/unlink.google.php'; //
             } else {
                 include_once 'pages/404.php'; //
@@ -286,7 +336,7 @@ switch ($page) {
         break;
     case 'admin_helpdesk':
         if (isset($_SESSION['admin_id'])) {
-            include_once 'admin/helpdesk.php';
+            include_once 'admin/helpdesk.php'; //
         } else {
             header("Location: {$base_url}?page=admin_login");
             exit;
@@ -294,7 +344,7 @@ switch ($page) {
         break;
     case 'admin_helpdesk_view':
         if (isset($_SESSION['admin_id'])) {
-            include_once 'admin/helpdesk_view.php';
+            include_once 'admin/helpdesk_view.php'; //
         } else {
             header("Location: {$base_url}?page=admin_login");
             exit;
@@ -302,22 +352,20 @@ switch ($page) {
         break;
 
     // หน้าตรวจสอบและแก้ไข
-    case 'auth_check_admin_login': // ควรเข้าถึงผ่าน path ที่ถูกต้อง เช่น auth/check_admin_login.php โดยตรง
+    case 'auth_check_admin_login':
         include_once 'auth/check_admin_login.php'; //
         break;
-    case 'reset_admin_password': // ควรเข้าถึงผ่าน path ที่ถูกต้อง
+    case 'reset_admin_password':
         include_once 'auth/reset_admin_password.php';
         break;
-    case 'debug': // ควรเข้าถึงผ่าน path ที่ถูกต้อง
+    case 'debug':
         include_once 'auth/debug.php'; //
         break;
-
-    // หน้า migrate passwords (ควรเข้าถึงผ่าน path ที่ถูกต้อง และรันครั้งเดียว)
-    case 'migrate_passwords_auth': // เปลี่ยนชื่อ page route ไม่ให้ชนกับไฟล์ config
-        if (file_exists('auth/migrate_passwords.php')) { //
-            include_once 'auth/migrate_passwords.php';
-        } else if (file_exists('config/migrate_passwords.php')) { //
-            include_once 'config/migrate_passwords.php';
+    case 'migrate_passwords_auth':
+        if (file_exists('auth/migrate_passwords.php')) {
+            include_once 'auth/migrate_passwords.php'; //
+        } else if (file_exists('config/migrate_passwords.php')) {
+            include_once 'config/migrate_passwords.php'; //
         } else {
             include_once 'pages/404.php'; //
         }
@@ -334,3 +382,5 @@ switch ($page) {
 include_once 'includes/footer.php'; //
 
 ob_end_flush(); // ส่ง Output Buffer ทั้งหมดไปยัง Browser
+
+?>
