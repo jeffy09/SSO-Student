@@ -42,7 +42,7 @@ body {
     top: 0;
     left: calc(var(--sidebar-width) * -1); /* เริ่มต้นซ่อนไว้ทางซ้ายสุด */
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
-    transition: left 0.3s ease-in-out;
+    /* transition: left 0.3s ease-in-out; */
     z-index: 1030; /* ให้ Sidebar อยู่บนสุด */
     display: flex;
     flex-direction: column;
@@ -136,7 +136,8 @@ body {
     line-height: 1;
 }
 .sidebar-link .hide-menu {
-    transition: opacity 0.3s;
+    /* transition: opacity 0.3s; */ /* เอาบรรทัดนี้ออก หรือ comment ไว้ */
+    opacity: 1 !important; /* กำหนดให้ opacity เป็น 1 ทันที และใช้ !important เพื่อ override */
     white-space: nowrap;
 }
 .sidebar-link:hover,
@@ -196,7 +197,6 @@ body {
     padding-top: var(--navbar-height); /* เว้นที่สำหรับ Navbar ด้านบน (default) */
     width: 100%; /* Default เต็มความกว้าง */
     margin-left: 0; /* Default ไม่มี margin ซ้าย */
-    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out, padding-top 0s; /* Add padding-top to transitions */
     position: relative; /* Ensure it's part of the flow */
 }
 
@@ -211,7 +211,6 @@ body {
     top: 0;
     left: 0; /* เริ่มต้นเต็มความกว้าง */
     right: 0;
-    transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
     z-index: 1020; /* Navbar อยู่เหนือ content แต่หลัง Sidebar */
 }
 
