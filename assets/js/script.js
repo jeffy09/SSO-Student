@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function pageShouldHaveSidebar() {
         const currentPage = new URLSearchParams(window.location.search).get('page') || 'home';
-        const isUserSessionActive = mainWrapper && (mainWrapper.hasAttribute('data-user-id') || mainWrapper.hasAttribute('data-admin-id'));
+        const isUserSessionActive = mainWrapper && (mainWrapper.hasAttribute('data-user-id') || mainWrapper.hasAttribute('data-admin-id') || mainWrapper.hasAttribute('data-teacher-id'));
         return currentPage !== 'home' && isUserSessionActive;
     }
 
