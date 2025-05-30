@@ -21,7 +21,7 @@ function write_auth_log($message) {
 }
 
 // ตรวจสอบว่ามีการส่ง user_type มาหรือไม่
-if (isset($_GET['user_type']) && ($_GET['user_type'] === 'student' || $_GET['user_type'] === 'admin')) {
+if (isset($_GET['user_type']) && ($_GET['user_type'] === 'student' || $_GET['user_type'] === 'admin' || $_GET['user_type'] === 'teacher')) { // เพิ่ม 'teacher'
     $user_type = $_GET['user_type'];
     
     // บันทึกประเภทผู้ใช้ใน session
@@ -33,11 +33,10 @@ if (isset($_GET['user_type']) && ($_GET['user_type'] === 'student' || $_GET['use
     $from_profile = $_GET['from_profile'] ?? '';
     if ($from_profile === '1' || $from_profile === 'true' || $from_profile === 'yes') {
         $_SESSION['connecting_from_profile'] = true;
-        write_auth_log("Connection initiated from profile page");
+        write_auth_log("Connection initiated from profile page for $user_type");
     } else {
-        // ลบ session เก่าถ้ามี
         unset($_SESSION['connecting_from_profile']);
-        write_auth_log("Regular login flow");
+        write_auth_log("Regular login flow for $user_type");
     }
     
     try {
@@ -50,22 +49,22 @@ if (isset($_GET['user_type']) && ($_GET['user_type'] === 'student' || $_GET['use
         write_auth_log("Generated OAuth URL: " . $auth_url);
         write_auth_log("Redirecting to Google OAuth...");
         
-        // Redirect ไปยัง Google OAuth
         header("Location: " . $auth_url);
         exit;
         
     } catch(Exception $e) {
         $error_message = "เกิดข้อผิดพลาดในการสร้าง OAuth URL: " . $e->getMessage();
-        write_auth_log("Error: " . $error_message);
+        write_auth_log("Error for $user_type: " . $error_message);
         
-        // จัดการ error ตาม user type และการเชื่อมต่อ
         if (isset($_SESSION['connecting_from_profile']) && $_SESSION['connecting_from_profile'] === true) {
             $_SESSION['google_connect_error'] = $error_message;
             unset($_SESSION['connecting_from_profile']);
             
             if ($user_type === 'student') {
                 header("Location: index.php?page=student_profile&google_connect=error");
-            } else {
+            } elseif ($user_type === 'teacher') {
+                header("Location: index.php?page=teacher_profile&google_connect=error");
+            } else { // admin
                 header("Location: index.php?page=admin_profile&google_connect=error");
             }
         } else {
@@ -73,7 +72,9 @@ if (isset($_GET['user_type']) && ($_GET['user_type'] === 'student' || $_GET['use
             
             if ($user_type === 'student') {
                 header("Location: index.php?page=student_login");
-            } else {
+            } elseif ($user_type === 'teacher') {
+                header("Location: index.php?page=teacher_login");
+            } else { // admin
                 header("Location: index.php?page=admin_login");
             }
         }
