@@ -87,7 +87,7 @@ try {
         </div>
     </div>
     
-    <div class="col-md-6">
+    <!-- <div class="col-md-6">
         <div class="card shadow mb-4">
             <div class="card-header bg-info text-white">
                 <h5 class="card-title mb-0">การเชื่อมต่อบัญชี</h5>
@@ -111,7 +111,7 @@ try {
                 <?php endif; ?>
             </div>
         </div>
-    </div>
+    </div> -->
 </div>
 
 <div class="card shadow mb-4">
@@ -150,7 +150,7 @@ try {
 </div>
 
 
-<?php if(isset($_SESSION['show_google_link']) && $_SESSION['show_google_link']): ?>
+<!-- <?php if(isset($_SESSION['show_google_link']) && $_SESSION['show_google_link']): ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         Swal.fire({
@@ -169,4 +169,4 @@ try {
     
     <?php unset($_SESSION['show_google_link']); ?>
 </script>
-<?php endif; ?>
+<?php endif; ?> -->
