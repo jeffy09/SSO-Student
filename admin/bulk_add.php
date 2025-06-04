@@ -11,7 +11,8 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 // วางฟังก์ชัน saveAdminLog ที่นี่
-function saveAdminLog($db, $admin_id, $action, $old_data = null, $new_data = null) {
+function saveAdminLog($db, $admin_id, $action, $old_data = null, $new_data = null)
+{
     try {
         if (is_array($old_data) || is_object($old_data)) $old_data = json_encode($old_data, JSON_UNESCAPED_UNICODE);
         if (is_array($new_data) || is_object($new_data)) $new_data = json_encode($new_data, JSON_UNESCAPED_UNICODE);
@@ -38,7 +39,8 @@ $alert_type = '';
 $alert_message = '';
 $show_alert = false;
 
-function logBulkAddActivity($message) { // Renamed function to avoid conflict
+function logBulkAddActivity($message)
+{ // Renamed function to avoid conflict
     $log_dir = 'logs';
     if (!is_dir($log_dir)) {
         mkdir($log_dir, 0755, true);
@@ -50,27 +52,40 @@ function logBulkAddActivity($message) { // Renamed function to avoid conflict
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
     logBulkAddActivity("Bulk add process started by admin ID: " . $_SESSION['admin_id']);
-    
+
     try {
         $file = $_FILES['csv_file'];
         logBulkAddActivity("File upload attempt - Name: " . $file['name'] . ", Size: " . $file['size'] . ", Error: " . $file['error']);
-        
-        if ($file['error'] !== UPLOAD_ERR_OK) { /* ... error handling ... */ } //
-        if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) { /* ... error handling ... */ } //
-        
+
+        if ($file['error'] !== UPLOAD_ERR_OK) { /* ... error handling ... */
+        } //
+        if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) { /* ... error handling ... */
+        } //
+
         $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if ($file_ext !== 'csv') { throw new Exception("กรุณาอัปโหลดไฟล์ CSV เท่านั้น"); } //
-        if ($file['size'] > 5 * 1024 * 1024) { throw new Exception("ขนาดไฟล์เกิน 5MB"); } // Increased limit slightly
+        if ($file_ext !== 'csv') {
+            throw new Exception("กรุณาอัปโหลดไฟล์ CSV เท่านั้น");
+        } //
+        if ($file['size'] > 5 * 1024 * 1024) {
+            throw new Exception("ขนาดไฟล์เกิน 5MB");
+        } // Increased limit slightly
 
         $handle = fopen($file['tmp_name'], 'r');
-        if (!$handle) { throw new Exception("ไม่สามารถอ่านไฟล์ได้"); } //
-        
+        if (!$handle) {
+            throw new Exception("ไม่สามารถอ่านไฟล์ได้");
+        } //
+
         $header = fgetcsv($handle);
-        if (!$header || empty($header)) { fclose($handle); throw new Exception("ไฟล์ CSV ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง"); } //
-        
-        $header = array_map(function($col) { return trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $col)); }, $header);
+        if (!$header || empty($header)) {
+            fclose($handle);
+            throw new Exception("ไฟล์ CSV ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง");
+        } //
+
+        $header = array_map(function ($col) {
+            return trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $col));
+        }, $header);
         logBulkAddActivity("CSV header found: " . implode(', ', $header));
-        
+
         // คอลัมน์ที่จำเป็นพื้นฐาน
         $required_base_columns = ['user_type', 'id_card', 'firstname', 'lastname', 'email'];
         // คอลัมน์ที่จำเป็นสำหรับนักศึกษา
@@ -86,9 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
 
         $db->beginTransaction();
         logBulkAddActivity("Database transaction started");
-        
+
         $row_number = 1; // For header
-        
+
         while (($data = fgetcsv($handle)) !== FALSE) {
             $row_number++;
             if (empty(array_filter($data))) continue;
@@ -117,8 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 continue;
             }
 
-            if (!filter_var($row_data['email'], FILTER_VALIDATE_EMAIL)) { /* ... email validation ... */ } //
-            if (!preg_match('/^[0-9]{13}$/', $row_data['id_card'])) { /* ... id_card validation ... */ } //
+            if (!filter_var($row_data['email'], FILTER_VALIDATE_EMAIL)) { /* ... email validation ... */
+            } //
+            if (!preg_match('/^[0-9]{13}$/', $row_data['id_card'])) { /* ... id_card validation ... */
+            } //
 
             $password_hash = password_hash($row_data['id_card'], PASSWORD_DEFAULT);
 
@@ -126,7 +143,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 foreach ($required_student_columns as $column) {
                     if (empty($row_data[$column])) {
                         $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "ข้อมูลนักศึกษา {$column} ว่างเปล่า"];
-                        $error_in_row = true; break;
+                        $error_in_row = true;
+                        break;
                     }
                 }
                 if ($error_in_row) continue;
@@ -138,8 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 $check_stmt->bindParam(':id_card', $row_data['id_card']);
                 $check_stmt->execute();
                 if ($check_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
-                     $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "รหัสนักศึกษา, อีเมล, หรือรหัสบัตรประชาชน มีอยู่ในระบบแล้ว (นักศึกษา)"];
-                     continue;
+                    $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "รหัสนักศึกษา, อีเมล, หรือรหัสบัตรประชาชน มีอยู่ในระบบแล้ว (นักศึกษา)"];
+                    continue;
                 }
 
                 $insert_query = "INSERT INTO students (student_id, id_card, password_hash, firstname, lastname, email, phone, faculty, department, address, first_login, created_at) 
@@ -148,21 +166,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 $insert_stmt->bindParam(':student_id', $row_data['student_id']);
                 $insert_stmt->bindParam(':id_card', $row_data['id_card']);
                 // ... bind other student params ...
-                 $insert_stmt->bindParam(':password_hash', $password_hash);
-                 $insert_stmt->bindParam(':firstname', $row_data['firstname']);
-                 $insert_stmt->bindParam(':lastname', $row_data['lastname']);
-                 $insert_stmt->bindParam(':email', $row_data['email']);
-                 $insert_stmt->bindValue(':phone', $row_data['phone'] ?? '');
-                 $insert_stmt->bindParam(':faculty', $row_data['faculty']);
-                 $insert_stmt->bindValue(':department', $row_data['department'] ?? '');
-                 $insert_stmt->bindValue(':address', $row_data['address'] ?? '');
-
-
+                $insert_stmt->bindParam(':password_hash', $password_hash);
+                $insert_stmt->bindParam(':firstname', $row_data['firstname']);
+                $insert_stmt->bindParam(':lastname', $row_data['lastname']);
+                $insert_stmt->bindParam(':email', $row_data['email']);
+                $insert_stmt->bindValue(':phone', $row_data['phone'] ?? '');
+                $insert_stmt->bindParam(':faculty', $row_data['faculty']);
+                $insert_stmt->bindValue(':department', $row_data['department'] ?? '');
+                $insert_stmt->bindValue(':address', $row_data['address'] ?? '');
             } elseif ($current_user_type === 'teacher') {
-                 foreach ($required_teacher_columns as $column) {
+                foreach ($required_teacher_columns as $column) {
                     if (empty($row_data[$column])) {
                         $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "ข้อมูลอาจารย์ {$column} ว่างเปล่า"];
-                        $error_in_row = true; break;
+                        $error_in_row = true;
+                        break;
                     }
                 }
                 if ($error_in_row) continue;
@@ -173,11 +190,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 $check_stmt->bindParam(':email', $row_data['email']);
                 $check_stmt->bindParam(':id_card', $row_data['id_card']);
                 $check_stmt->execute();
-                 if ($check_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
-                     $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "รหัสอาจารย์, อีเมล, หรือรหัสบัตรประชาชน มีอยู่ในระบบแล้ว (อาจารย์)"];
-                     continue;
+                if ($check_stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
+                    $error_rows[] = ['row' => $row_number, 'data' => implode(',', $data), 'error' => "รหัสอาจารย์, อีเมล, หรือรหัสบัตรประชาชน มีอยู่ในระบบแล้ว (อาจารย์)"];
+                    continue;
                 }
-                
+
                 $insert_query = "INSERT INTO teachers (teacher_id, id_card, password_hash, firstname, lastname, email, phone, department, position, first_login, created_at) 
                                  VALUES (:teacher_id, :id_card, :password_hash, :firstname, :lastname, :email, :phone, :department, :position, 1, NOW())";
                 $insert_stmt = $db->prepare($insert_query);
@@ -191,8 +208,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 $insert_stmt->bindValue(':phone', $row_data['phone'] ?? '');
                 $insert_stmt->bindValue(':department', $row_data['department'] ?? ''); // CSV column name for teacher dept
                 $insert_stmt->bindValue(':position', $row_data['position'] ?? '');
-
-
             }
 
             if ($insert_stmt->execute()) {
@@ -201,13 +216,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 $system_table_to_use = ($current_user_type === 'student') ? 'student_systems' : 'teacher_systems';
                 $system_user_id_column = ($current_user_type === 'student') ? 'student_id' : 'teacher_id';
 
-                $systems_to_add_details = [ /* ... as before ... */ ]; //
+                $systems_to_add_details = [ /* ... as before ... */]; //
                 $insert_system_q = "INSERT INTO {$system_table_to_use} ({$system_user_id_column}, system_name, username, initial_password, system_url, manual_url) VALUES (:user_id, :system_name, :username, :initial_password, :system_url, :manual_url)";
                 $system_stmt_exec = $db->prepare($insert_system_q);
 
                 // Example for 'Email' system - adapt for others
                 if (isset($row_data['email_user']) && isset($row_data['email_pass'])) {
-                     if (!empty($row_data['email_user']) || !empty($row_data['email_pass'])) { // Add only if user/pass is present
+                    if (!empty($row_data['email_user']) || !empty($row_data['email_pass'])) { // Add only if user/pass is present
                         $system_stmt_exec->execute([
                             ':user_id' => $user_db_id,
                             ':system_name' => 'Email',
@@ -218,7 +233,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                         ]);
                     }
                 }
-                // Repeat for Office 365, Portal, etc.
+                // --- For Office 365 ---
+                if (isset($row_data['office365_user']) && isset($row_data['office365_pass'])) {
+                    if (!empty($row_data['office365_user']) || !empty($row_data['office365_pass'])) {
+                        $system_stmt_exec->execute([
+                            ':user_id' => $user_db_id,
+                            ':system_name' => 'Office 365',
+                            ':username' => $row_data['office365_user'],
+                            ':initial_password' => $row_data['office365_pass'],
+                            // ใช้ URL จาก CSV ถ้ามี, หรือจาก $default_system_details, หรือค่า fallback
+                            ':system_url' => $row_data['office365_url'] ?? ($default_system_details['Office 365']['url'] ?? 'https://www.office.com'),
+                            ':manual_url' => $row_data['office365_manual_url'] ?? ($default_system_details['Office 365']['manual_url'] ?? '#')
+                        ]);
+                    }
+                }
+
+                // --- For Portal ---
+                if (isset($row_data['portal_user']) && isset($row_data['portal_pass'])) {
+                    if (!empty($row_data['portal_user']) || !empty($row_data['portal_pass'])) {
+                        $system_stmt_exec->execute([
+                            ':user_id' => $user_db_id,
+                            ':system_name' => 'Portal',
+                            ':username' => $row_data['portal_user'],
+                            ':initial_password' => $row_data['portal_pass'],
+                            // ใช้ URL จาก CSV ถ้ามี, หรือจาก $default_system_details, หรือค่า fallback
+                            ':system_url' => $row_data['portal_url'] ?? ($default_system_details['Portal']['url'] ?? 'http://portal.mbu.ac.th'),
+                            ':manual_url' => $row_data['portal_manual_url'] ?? ($default_system_details['Portal']['manual_url'] ?? '#')
+                        ]);
+                    }
+                }
 
                 $success_count++;
                 logBulkAddActivity("Successfully inserted {$current_user_type}: " . ($row_data[$required_base_columns[0]] ?? 'N/A'));
@@ -228,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 logBulkAddActivity("Failed to insert {$current_user_type}: " . ($row_data[$required_base_columns[0]] ?? 'N/A') . " - " . $error_info[2]);
             }
         }
-        
+
         fclose($handle);
         $log_action = "นำเข้าข้อมูลผู้ใช้แบบกลุ่ม: สำเร็จ {$success_count} รายการ จากทั้งหมด {$total_rows_processed} รายการ"; //
         // ... (save admin log) ...
@@ -237,17 +280,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
 
         $db->commit();
         logBulkAddActivity("Database transaction committed");
-        
+
         $import_success_flag = true; // Renamed to avoid conflict
         $alert_type = 'success';
         $alert_message = "นำเข้าข้อมูลสำเร็จ {$success_count} รายการ จากทั้งหมด {$total_rows_processed} รายการ";
-        if (count($error_rows) > 0) { $alert_message .= " (มีข้อผิดพลาด " . count($error_rows) . " รายการ)"; } //
+        if (count($error_rows) > 0) {
+            $alert_message .= " (มีข้อผิดพลาด " . count($error_rows) . " รายการ)";
+        } //
         $show_alert = true;
         logBulkAddActivity("Bulk add process completed.");
-
-    } catch(Exception $e) {
-        if ($db->inTransaction()) { $db->rollBack(); logBulkAddActivity("Transaction rolled back."); } //
-        $alert_type = 'error'; $alert_message = $e->getMessage(); $show_alert = true; //
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+            logBulkAddActivity("Transaction rolled back.");
+        } //
+        $alert_type = 'error';
+        $alert_message = $e->getMessage();
+        $show_alert = true; //
         logBulkAddActivity("Bulk add process failed: " . $e->getMessage());
     }
 }
@@ -278,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                         <label for="csv_file" class="form-label">เลือกไฟล์ CSV <span class="text-danger">*</span></label>
                         <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
                         <div class="form-text">
-                             ขนาดไฟล์สูงสุด: <?php echo ini_get('upload_max_filesize'); ?>.
+                            ขนาดไฟล์สูงสุด: <?php echo ini_get('upload_max_filesize'); ?>.
                             รหัสบัตรประชาชนจะถูกใช้เป็นรหัสผ่านเริ่มต้นและเข้ารหัสอัตโนมัติ.
                         </div>
                     </div>
@@ -286,32 +335,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                 </form>
             </div>
         </div>
-        
-        <?php if(isset($import_success_flag) && $import_success_flag): ?>
+
+        <?php if (isset($import_success_flag) && $import_success_flag): ?>
             <div class="card shadow mb-4">
-                <div class="card-header bg-success text-white"><h5 class="card-title mb-0"><i class="fas fa-check-circle me-2"></i>ผลการนำเข้า</h5></div>
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0"><i class="fas fa-check-circle me-2"></i>ผลการนำเข้า</h5>
+                </div>
                 <div class="card-body">
                     <div class="row text-center mb-3">
-                        <div class="col-md-4"><div class="border rounded p-3"><h3 class="text-primary"><?php echo $total_rows_processed; ?></h3><small class="text-muted">ทั้งหมดในไฟล์</small></div></div>
-                        <div class="col-md-4"><div class="border rounded p-3"><h3 class="text-success"><?php echo $success_count; ?></h3><small class="text-muted">สำเร็จ</small></div></div>
-                        <div class="col-md-4"><div class="border rounded p-3"><h3 class="text-danger"><?php echo count($error_rows); ?></h3><small class="text-muted">ผิดพลาด</small></div></div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-primary"><?php echo $total_rows_processed; ?></h3><small class="text-muted">ทั้งหมดในไฟล์</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-success"><?php echo $success_count; ?></h3><small class="text-muted">สำเร็จ</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h3 class="text-danger"><?php echo count($error_rows); ?></h3><small class="text-muted">ผิดพลาด</small>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <?php if(count($error_rows) > 0): ?>
+
+                    <?php if (count($error_rows) > 0): ?>
                         <div class="alert alert-warning alert-permanent">
                             <h6><i class="fas fa-exclamation-triangle me-2"></i>รายการที่เกิดข้อผิดพลาด:</h6>
                             <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                                 <table class="table table-sm table-bordered mt-2">
-                                    <thead class="table-light sticky-top"><tr><th>แถวที่</th><th>ข้อมูล</th><th>สาเหตุ</th></tr></thead>
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>แถวที่</th>
+                                            <th>ข้อมูล</th>
+                                            <th>สาเหตุ</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
-                                        <?php foreach($error_rows as $row_err): ?>
-                                            <tr><td><?php echo $row_err['row']; ?></td><td><code class="small"><?php echo htmlspecialchars($row_err['data']); ?></code></td><td><span class="text-danger small"><?php echo htmlspecialchars($row_err['error']); ?></span></td></tr>
+                                        <?php foreach ($error_rows as $row_err): ?>
+                                            <tr>
+                                                <td><?php echo $row_err['row']; ?></td>
+                                                <td><code class="small"><?php echo htmlspecialchars($row_err['data']); ?></code></td>
+                                                <td><span class="text-danger small"><?php echo htmlspecialchars($row_err['error']); ?></span></td>
+                                            </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
-                         <div class="text-center mt-3">
+                        <div class="text-center mt-3">
                             <button type="button" class="btn btn-warning" onclick="downloadErrorCsvReport()">
                                 <i class="fas fa-download me-2"></i>ดาวน์โหลดรายงานข้อผิดพลาด
                             </button>
@@ -321,10 +394,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
             </div>
         <?php endif; ?>
     </div>
-    
+
     <div class="col-md-5">
         <div class="card shadow mb-4">
-            <div class="card-header bg-info text-white"><h5 class="card-title mb-0"><i class="fas fa-file-csv me-2"></i>โครงสร้างไฟล์ CSV</h5></div>
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0"><i class="fas fa-file-csv me-2"></i>โครงสร้างไฟล์ CSV</h5>
+            </div>
             <div class="card-body">
                 <p>ไฟล์ CSV ต้องมี Encoding เป็น <strong>UTF-8</strong>. คอลัมน์ <code>user_type</code> ต้องเป็น 'student' หรือ 'teacher'.</p>
                 <div class="mb-3">
@@ -353,48 +428,53 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
 </div>
 
 <script>
-<?php if ($show_alert): ?>
-document.addEventListener('DOMContentLoaded', function() {
-    Swal.fire({
-        icon: '<?php echo $alert_type; ?>',
-        title: '<?php echo $alert_type == "success" ? "สำเร็จ!" : "เกิดข้อผิดพลาด!"; ?>',
-        html: '<?php echo addslashes(nl2br($alert_message)); ?>', // ใช้ nl2br เผื่อข้อความยาว
-        confirmButtonText: 'ตกลง'
-    });
-});
-<?php endif; ?>
-
-document.getElementById('uploadFormBulk')?.addEventListener('submit', function(e) { /* ... SweetAlert confirmation ... */ }); //
-
-function downloadSampleCsv() {
-    const csvHeader = "user_type,student_id,teacher_id,id_card,firstname,lastname,email,faculty,department,phone,address,position,email_user,email_pass,office365_user,office365_pass,portal_user,portal_pass,email_manual_url,office365_manual_url,portal_manual_url\n";
-    const studentSample = "student,S0001,,1111111111111,สมชาย,เรียนดี,somchai.s@mbu.ac.th,วิศวกรรมศาสตร์,คอมพิวเตอร์,0810001111,123 กทม.,,somchai.s@mbu.ac.th,StudentPass1,somchai.s@mbu.asia,StudentPass1,S0001,1111111111111,#,#,#\n";
-    const teacherSample = "teacher,,T001,2222222222222,สมศรี,สอนเก่ง,somsri.t@mbu.ac.th,,ศึกษาศาสตร์,0820002222,456 เชียงใหม่,อาจารย์,somsri.t@mbu.ac.th,TeacherPass1,somsri.t@mbu.asia,TeacherPass1,somsri.t,2222222222222,#,#,#\n";
-    const csvContent = csvHeader + studentSample + teacherSample;
-    
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'sample_users_import.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-}
-
-function downloadErrorCsvReport() {
-    <?php if (!empty($error_rows)): ?>
-    let csvContentErr = "แถวที่ในไฟล์CSV,ข้อมูล,สาเหตุข้อผิดพลาด\n";
-    <?php foreach($error_rows as $row_item): ?>
-    csvContentErr += "<?php echo $row_item['row']; ?>," + 
-                     "\"<?php echo str_replace('"', '""', htmlspecialchars($row_item['data'])); ?>\"," + 
-                     "\"<?php echo str_replace('"', '""', htmlspecialchars($row_item['error'])); ?>\"\n";
-    <?php endforeach; ?>
-    
-    const blobErr = new Blob(['\ufeff' + csvContentErr], { type: 'text/csv;charset=utf-8;' });
-    const linkErr = document.createElement('a');
-    linkErr.href = URL.createObjectURL(blobErr);
-    linkErr.download = 'import_error_report_<?php echo date('Ymd_His'); ?>.csv';
-    linkErr.click();
-    URL.revokeObjectURL(linkErr.href);
+    <?php if ($show_alert): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                icon: '<?php echo $alert_type; ?>',
+                title: '<?php echo $alert_type == "success" ? "สำเร็จ!" : "เกิดข้อผิดพลาด!"; ?>',
+                html: '<?php echo addslashes(nl2br($alert_message)); ?>', // ใช้ nl2br เผื่อข้อความยาว
+                confirmButtonText: 'ตกลง'
+            });
+        });
     <?php endif; ?>
-}
+
+    document.getElementById('uploadFormBulk')?.addEventListener('submit', function(e) {
+        /* ... SweetAlert confirmation ... */ }); //
+
+    function downloadSampleCsv() {
+        const csvHeader = "user_type,student_id,teacher_id,id_card,firstname,lastname,email,faculty,department,phone,address,position,email_user,email_pass,office365_user,office365_pass,portal_user,portal_pass,email_manual_url,office365_manual_url,portal_manual_url\n";
+        const studentSample = "student,S0001,,1111111111111,สมชาย,เรียนดี,somchai.s@mbu.ac.th,วิศวกรรมศาสตร์,คอมพิวเตอร์,0810001111,123 กทม.,,somchai.s@mbu.ac.th,StudentPass1,somchai.s@mbu.asia,StudentPass1,S0001,1111111111111,#,#,#\n";
+        const teacherSample = "teacher,,T001,2222222222222,สมศรี,สอนเก่ง,somsri.t@mbu.ac.th,,ศึกษาศาสตร์,0820002222,456 เชียงใหม่,อาจารย์,somsri.t@mbu.ac.th,TeacherPass1,somsri.t@mbu.asia,TeacherPass1,somsri.t,2222222222222,#,#,#\n";
+        const csvContent = csvHeader + studentSample + teacherSample;
+
+        const blob = new Blob(['\ufeff' + csvContent], {
+            type: 'text/csv;charset=utf-8;'
+        });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'sample_users_import.csv';
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    function downloadErrorCsvReport() {
+        <?php if (!empty($error_rows)): ?>
+            let csvContentErr = "แถวที่ในไฟล์CSV,ข้อมูล,สาเหตุข้อผิดพลาด\n";
+            <?php foreach ($error_rows as $row_item): ?>
+                csvContentErr += "<?php echo $row_item['row']; ?>," +
+                    "\"<?php echo str_replace('"', '""', htmlspecialchars($row_item['data'])); ?>\"," +
+                    "\"<?php echo str_replace('"', '""', htmlspecialchars($row_item['error'])); ?>\"\n";
+            <?php endforeach; ?>
+
+            const blobErr = new Blob(['\ufeff' + csvContentErr], {
+                type: 'text/csv;charset=utf-8;'
+            });
+            const linkErr = document.createElement('a');
+            linkErr.href = URL.createObjectURL(blobErr);
+            linkErr.download = 'import_error_report_<?php echo date('Ymd_His'); ?>.csv';
+            linkErr.click();
+            URL.revokeObjectURL(linkErr.href);
+        <?php endif; ?>
+    }
 </script>
