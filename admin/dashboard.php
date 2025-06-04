@@ -157,44 +157,7 @@ try {
         </div>
     </div>
 </div>
-<div class="row">
-    <div class="col-md-4">
-        <div class="card border-info mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title">อาจารย์ทั้งหมด</h5>
-                        <h2 class="mb-0"><?php echo $teacher_count; ?></h2>
-                    </div>
-                    <div>
-                        <i class="fas fa-chalkboard-teacher fa-3x text-info"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="card-footer bg-transparent border-info">
-                <a href="?page=admin_users&user_type=teacher" class="text-decoration-none">ดูรายชื่ออาจารย์ทั้งหมด <i class="fas fa-arrow-right"></i></a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-warning mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title">อาจารย์เชื่อมต่อ Google</h5>
-                        <h2 class="mb-0"><?php echo $google_teacher_count; ?></h2>
-                    </div>
-                    <div>
-                        <i class="fab fa-google fa-3x text-warning"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="card-footer bg-transparent border-warning">
-                <span class="text-muted">คิดเป็น <?php echo ($teacher_count > 0) ? round(($google_teacher_count / $teacher_count) * 100, 2) : 0; ?>% ของอาจารย์ทั้งหมด</span>
-            </div>
-        </div>
-    </div>
-</div>
+
 <div class="row">
     <div class="col-md-8">
         <div class="card shadow mb-4">
