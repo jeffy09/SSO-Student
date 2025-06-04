@@ -10,6 +10,27 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 
+// วางฟังก์ชัน saveAdminLog ที่นี่
+function saveAdminLog($db, $admin_id, $action, $old_data = null, $new_data = null) {
+    try {
+        if (is_array($old_data) || is_object($old_data)) $old_data = json_encode($old_data, JSON_UNESCAPED_UNICODE);
+        if (is_array($new_data) || is_object($new_data)) $new_data = json_encode($new_data, JSON_UNESCAPED_UNICODE);
+
+        $log_query = "INSERT INTO admin_logs (admin_id, action, old_data, new_data, created_at) VALUES (:admin_id, :action, :old_data, :new_data, NOW())";
+        $log_stmt = $db->prepare($log_query);
+        $log_stmt->bindParam(':admin_id', $admin_id);
+        $log_stmt->bindParam(':action', $action);
+        $log_stmt->bindParam(':old_data', $old_data);
+        $log_stmt->bindParam(':new_data', $new_data);
+        $log_stmt->execute();
+    } catch (PDOException $e) {
+        // อาจจะ log ลงไฟล์ หรือแสดงข้อผิดพลาดเบาๆ แทนการใช้ error_log โดยตรงใน context นี้
+        // หรือปล่อยให้ระบบ error handling หลักจัดการ
+        // สำหรับตอนนี้ ปล่อยเป็น error_log ไปก่อน ตามโค้ดเดิม
+        error_log("Failed to save admin log from bulk_add: " . $e->getMessage());
+    }
+}
+
 $success_count = 0;
 $error_rows = [];
 $total_rows_processed = 0; // Changed from total_rows to avoid conflict
