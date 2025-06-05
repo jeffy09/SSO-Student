@@ -106,7 +106,7 @@ if (isset($_SESSION['student_id'])) {
                     </ul>
                     <div class="navbar-collapse justify-content-end px-0" id="navbarNav"> <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end"> <?php if (isset($_SESSION['student_id'])): ?>
                                 <li class="nav-item dropdown"> <a class="nav-link nav-icon-hover" href="javascript:void(0)" id="drop2" data-bs-toggle="dropdown"
-                                        aria-expanded="false"> <img src="assets/images/profile/user-1.jpg" alt="" width="35" height="35" class="rounded-circle"> </a>
+                                        aria-expanded="false"> <img src="assets/images/profile/user-1.png" alt="" width="35" height="35" class="rounded-circle"> </a>
                                     <div class="dropdown-menu dropdown-menu-end dropdown-menu-animate-up" aria-labelledby="drop2"> <div class="message-body"> <h6 class="dropdown-header text-muted"><?php echo htmlspecialchars($_SESSION['student_name']); ?></h6> <a href="?page=student_profile" class="dropdown-item"> <i class="fas fa-user-edit me-2"></i> แก้ไขโปรไฟล์ </a>
                                             <a href="?page=logout" class="btn btn-outline-primary mx-3 mt-2 d-block">ออกจากระบบ</a> </div>
                                     </div>
