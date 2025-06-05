@@ -228,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['csv_file'])) {
                             ':system_name' => 'Email',
                             ':username' => $row_data['email_user'],
                             ':initial_password' => $row_data['email_pass'],
-                            ':system_url' => $systems_to_add_details['Email']['url'] ?? 'https://mail.google.com',
+                            ':system_url' => $systems_to_add_details['Email']['url'] ?? 'https://accounts.google.com',
                             ':manual_url' => $row_data['email_manual_url'] ?? '#' // Assuming you add manual_url columns in CSV
                         ]);
                     }
